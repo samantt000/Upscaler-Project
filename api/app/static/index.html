@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Апскейлер — увеличение изображений с помощью ИИ</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top__inner">
+      <a class="logo" href="/">Апскейлер</a>
+      <nav><a href="/metrics">Метрики</a></nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <h1>Увеличение изображений с помощью ИИ</h1>
+      <p>Бесплатно и без регистрации. Модель Real-ESRGAN увеличивает фото в 2 или 4 раза и
+        восстанавливает детали. Файлы обрабатываются локально и удаляются через <span data-retention>24</span> ч.</p>
+    </section>
+
+    <!-- Шаг 1: загрузка (FR-001, FR-002) -->
+    <section class="card" id="upload-card">
+      <label class="dropzone" id="dropzone" tabindex="0">
+        <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" hidden>
+        <div class="dropzone__empty" id="drop-empty">
+          <svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true"><path fill="currentColor" d="M19 13v6H5v-6H3v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6h-2Zm-6-9.17 3.59 3.58L18 6l-6-6-6 6 1.41 1.41L11 3.83V16h2V3.83Z"/></svg>
+          <strong>Перетащите изображение сюда</strong>
+          <span>или нажмите, чтобы выбрать файл</span>
+          <small id="limits-hint">JPG, PNG, WEBP · до 10 МБ · до 2000×2000 px</small>
+        </div>
+        <div class="dropzone__file" id="drop-file" hidden>
+          <img id="thumb" alt="Выбранное изображение">
+          <div>
+            <strong id="file-name"></strong>
+            <span id="file-meta"></span>
+            <button type="button" class="link" id="change-file">Выбрать другой файл</button>
+          </div>
+        </div>
+      </label>
+
+      <div class="controls">
+        <fieldset class="segmented" id="scale-group">
+          <legend>Увеличение</legend>
+          <label><input type="radio" name="scale" value="2"><span>×2</span></label>
+          <label><input type="radio" name="scale" value="4" checked><span>×4</span></label>
+        </fieldset>
+        <span class="out-size" id="out-size"></span>
+        <button class="btn btn--primary" id="start-btn" disabled>Улучшить</button>
+      </div>
+      <p class="error" id="upload-error" role="alert" hidden></p>
+    </section>
+
+    <!-- Шаг 2: прогресс (FR-004) -->
+    <section class="card" id="progress-card" hidden>
+      <div class="progress__head">
+        <strong id="progress-title">Загрузка…</strong>
+        <span id="progress-value">0%</span>
+      </div>
+      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-labelledby="progress-title">
+        <div class="progress__bar" id="progress-bar"></div>
+      </div>
+      <p class="muted" id="progress-note">Обработка выполняется по одной задаче; при нескольких пользователях задача ждёт в очереди.</p>
+    </section>
+
+    <!-- Шаг 3: результат (FR-004, FR-006, FR-009) -->
+    <section class="card" id="result-card" hidden>
+      <div class="result__head">
+        <div class="tabs" role="tablist">
+          <button role="tab" class="tab is-active" data-view="compare" aria-selected="true">До / после</button>
+          <button role="tab" class="tab" data-view="diff" aria-selected="false">Карта изменений</button>
+        </div>
+        <span class="badge badge--warn" id="face-flag" hidden>Зона активной генерации деталей</span>
+      </div>
+
+      <div class="viewer" id="view-compare">
+        <div class="compare" id="compare">
+          <img id="img-after" alt="После обработки">
+          <div class="compare__before"><img id="img-before" alt="До обработки (бикубическое увеличение)"></div>
+          <div class="compare__handle" aria-hidden="true"></div>
+          <span class="compare__label compare__label--l">До</span>
+          <span class="compare__label compare__label--r">После</span>
+          <input type="range" min="0" max="100" value="50" id="compare-range" aria-label="Положение разделителя «до/после»">
+        </div>
+      </div>
+      <div class="viewer" id="view-diff" hidden>
+        <img id="img-diff" class="diff" alt="Карта изменений">
+        <p class="legend"><span class="legend__bar"></span>Тёмное — результат близок к обычному увеличению; яркое — детали достроены моделью.</p>
+      </div>
+
+      <dl class="stats" id="stats"></dl>
+
+      <ul class="notices" id="notices"></ul>
+
+      <div class="actions">
+        <a class="btn btn--primary" id="download-btn" href="#">Скачать результат</a>
+        <button class="btn" id="new-btn">Новое изображение</button>
+        <button class="btn btn--ghost" id="delete-btn">Удалить файлы сейчас</button>
+      </div>
+      <p class="muted" id="expires"></p>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    <p>Результат сгенерирован нейросетью и может содержать детали, которых не было на исходном изображении.
+      Не загружайте чужие изображения без разрешения правообладателя.</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# Дополнение для видеокарты NVIDIA: PyTorch с CUDA 12.4 и проброс GPU в контейнер воркера.
+# Windows: Docker Desktop с WSL 2 и свежий драйвер NVIDIA (отдельный CUDA Toolkit не нужен).
+# Linux: дополнительно NVIDIA Container Toolkit.
+services:
+  worker:
+    build:
+      args:
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cu124
+        WITH_EVAL: "true"
+    image: upscaler-worker:gpu
+    environment:
+      DEVICE: cuda
+      TILE_SIZE: ${TILE_SIZE:-512}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

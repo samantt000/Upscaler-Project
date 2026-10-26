@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Метрики — Апскейлер</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top__inner">
+      <a class="logo" href="/">Апскейлер</a>
+      <nav><a href="/">Загрузить изображение</a></nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <h1>Метрики сервиса</h1>
+      <p>Сводка по журналу обработок. Изображения в журнале не хранятся. Обновляется каждые 5 секунд.</p>
+    </section>
+    <div class="grid" id="metrics"></div>
+    <p class="muted" id="updated"></p>
+  </main>
+
+  <script src="/static/metrics.js"></script>
+</body>
+</html>

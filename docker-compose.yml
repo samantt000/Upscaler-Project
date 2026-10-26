@@ -1,0 +1,56 @@
+# Запуск (CPU):  docker compose up -d --build
+# Запуск (GPU):  docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+name: upscaler
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    # Очередь и состояние задач в памяти: данные не переживают перезапуск, и это намеренно (FR-010)
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./api
+    image: upscaler-api
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      # NFR-008: по умолчанию сервис доступен с этого ПК и из локальной сети
+      - "${HOST_BIND:-0.0.0.0}:${HOST_PORT:-8000}:8000"
+    environment: &common-env
+      REDIS_URL: redis://redis:6379/0
+      DATA_DIR: /data
+      RETENTION_SECONDS: ${RETENTION_SECONDS:-86400}
+      BRISQUE_BASELINE: ${BRISQUE_BASELINE:-}
+    volumes:
+      - data:/data
+
+  worker:
+    build:
+      context: ./worker
+      args:
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cpu
+    image: upscaler-worker:cpu
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      DEVICE: ${DEVICE:-auto}
+      TILE_SIZE: ${TILE_SIZE:-256}
+      TORCH_THREADS: ${TORCH_THREADS:-0}
+      CLEANUP_INTERVAL_SECONDS: ${CLEANUP_INTERVAL_SECONDS:-600}
+      FACE_DETAIL_REDUCTION: ${FACE_DETAIL_REDUCTION:-0.5}
+    volumes:
+      - data:/data
+
+volumes:
+  data:
