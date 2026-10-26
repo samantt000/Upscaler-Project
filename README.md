@@ -29,11 +29,13 @@ flowchart LR
 
 ### 1. Подготовка (один раз)
 
-1. Установите [Docker Desktop](https://www.docker.com/products/docker-desktop/) и при установке
+1. Установите Git: `winget install --id Git.Git -e` (или установщик с https://git-scm.com/download/win),
+   затем **перезапустите PowerShell**. Без Git можно скачать проект архивом: Code → Download ZIP.
+2. Установите [Docker Desktop](https://www.docker.com/products/docker-desktop/) и при установке
    оставьте включённым **WSL 2**. После установки перезагрузите ПК и запустите Docker Desktop.
-2. Для GPU: обновите драйвер NVIDIA до последней версии (GeForce Experience или nvidia.com).
+3. Для GPU: обновите драйвер NVIDIA до последней версии (GeForce Experience или nvidia.com).
    Отдельно ставить CUDA Toolkit не нужно — Docker Desktop пробрасывает GPU через WSL 2.
-3. Проверьте, что Docker видит видеокарту (в PowerShell):
+4. Проверьте, что Docker видит видеокарту (в PowerShell):
    ```powershell
    docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
    ```
@@ -42,6 +44,7 @@ flowchart LR
 ### 2. Запуск
 
 ```powershell
+cd $HOME\Documents   # не запускайте из C:\Windows\System32
 git clone https://github.com/samantt000/Upscaler-Project.git
 cd Upscaler-Project
 copy .env.example .env
