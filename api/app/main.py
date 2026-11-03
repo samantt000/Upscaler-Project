@@ -14,7 +14,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import config, journal, metrics
+from . import access, config, journal, metrics
 from .validation import InvalidImage, validate
 
 QUEUE_KEY = "queue:jobs"
@@ -57,9 +57,14 @@ async def session_cookie(request: Request, call_next):
     response = await call_next(request)
     if is_new:
         response.set_cookie(config.SESSION_COOKIE, sid, httponly=True, samesite="lax",
-                            max_age=30 * 24 * 3600)
+                            secure=access.is_https(request), max_age=30 * 24 * 3600)
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
+
+
+# Регистрируется после session_cookie, поэтому выполняется раньше неё:
+# без ключа запрос не доходит до приложения и сессия не создаётся
+app.middleware("http")(access.gate)
 
 
 def session_hash(sid: str) -> str:
@@ -102,6 +107,21 @@ def index():
 @app.get("/metrics", include_in_schema=False)
 def metrics_page():
     return FileResponse(os.path.join(STATIC_DIR, "metrics.html"))
+
+
+@app.get("/invite", include_in_schema=False)
+def invite_page():
+    """QR-код и ссылка-приглашение для слайда (только в режиме демонстрации)."""
+    page = access.share_page()
+    if page is None:
+        raise HTTPException(404, "Режим демонстрации не включён")
+    return page
+
+
+@app.get("/healthz", include_in_schema=False)
+def liveness():
+    """Проверка живости процесса для HEALTHCHECK контейнера; доступна без ключа и ничего не раскрывает."""
+    return {"status": "ok"}
 
 
 # --- API ---

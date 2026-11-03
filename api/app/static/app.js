@@ -43,6 +43,11 @@ function showError(message) {
 
 async function api(path, options = {}) {
   const res = await fetch(path, { credentials: "same-origin", ...options });
+  // Режим демонстрации: доступ истёк или ключ сменили. Перезагрузка покажет страницу-приглашение
+  if (res.status === 401) {
+    location.reload();
+    throw new Error("Доступ только по ссылке-приглашению");
+  }
   const body = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) throw new Error(body?.detail || `Ошибка сервера (${res.status})`);
   return body;

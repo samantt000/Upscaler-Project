@@ -3,6 +3,8 @@
 Запуск при работающем сервисе:
     pip install -r tests/requirements.txt
     python tests/acceptance_test.py --url http://localhost:8000
+    # режим демонстрации (через Caddy, с ключом из .env):
+    python tests/acceptance_test.py --url https://<домен> --key <ACCESS_KEY>
 """
 import argparse
 import io
@@ -13,6 +15,19 @@ import requests
 from PIL import Image
 
 RESULTS: list[tuple[str, bool, str]] = []
+# Параметры подключения: ключ режима демонстрации и проверка сертификата
+CONNECTION = {"url": "", "key": None, "verify": True}
+
+
+def new_session() -> requests.Session:
+    """Новая анонимная сессия; в режиме демонстрации сначала открывает ссылку с ключом."""
+    s = requests.Session()
+    s.verify = CONNECTION["verify"]
+    # Иначе REQUESTS_CA_BUNDLE из окружения перебивает verify=False
+    s.trust_env = CONNECTION["verify"]
+    if CONNECTION["key"]:
+        s.get(f"{CONNECTION['url']}/", params={"key": CONNECTION["key"]}, timeout=10)
+    return s
 
 
 def check(name: str, ok: bool, details: str = "") -> None:
@@ -46,17 +61,17 @@ def check_queue_limit(url: str) -> None:
 
     Ставит задачи из разных сессий, пока сервис не ответит отказом, затем удаляет их.
     """
-    limit = requests.get(f"{url}/api/metrics", timeout=10).json()["queue"]["limit"]
+    limit = new_session().get(f"{url}/api/metrics", timeout=10).json()["queue"]["limit"]
     created, refused = [], None
     for i in range(limit + 5):
-        s = requests.Session()
+        s = new_session()
         res = upload(s, url, image_bytes("JPEG", (64, 64)), f"q{i}.jpg")
         if res.status_code == 202:
             created.append((s, res.json()["id"]))
         else:
             refused = res
             break
-    in_flight = requests.get(f"{url}/api/metrics", timeout=10).json()["queue"]
+    in_flight = new_session().get(f"{url}/api/metrics", timeout=10).json()["queue"]
     check("FR-005 лимит очереди", refused is not None and refused.status_code == 503
           and in_flight["length"] + in_flight["processing"] <= limit,
           f"принято {len(created)}, отказ HTTP {refused.status_code if refused is not None else '—'}, "
@@ -70,11 +85,17 @@ def main() -> int:
     parser.add_argument("--url", default="http://localhost:8000")
     parser.add_argument("--timeout", type=float, default=600, help="ожидание одной обработки, с")
     parser.add_argument("--queue-limit", action="store_true",
-                        help="проверить лимит очереди (лучше запускать на пустом сервисе)")
+                        help="проверить лимит очереди (только локально: снаружи /api/metrics закрыт)")
+    parser.add_argument("--key", help="ACCESS_KEY для режима демонстрации")
+    parser.add_argument("--insecure", action="store_true",
+                        help="не проверять сертификат (локальный тест Caddy с PUBLIC_DOMAIN=localhost)")
     args = parser.parse_args()
     url = args.url.rstrip("/")
+    CONNECTION.update(url=url, key=args.key, verify=not args.insecure)
+    if args.insecure:
+        requests.packages.urllib3.disable_warnings()
 
-    health = requests.get(f"{url}/api/health", timeout=10)
+    health = new_session().get(f"{url}/api/health", timeout=10)
     if health.status_code != 200:
         print("Сервис не готов:", health.text)
         return 1
@@ -89,7 +110,7 @@ def main() -> int:
         "не изображение": (b"hello, world", "text.png", 400),
     }
     for label, (data, name, status) in bad_files.items():
-        res = upload(requests.Session(), url, data, name)
+        res = upload(new_session(), url, data, name)
         check(f"FR-001 отклонение: {label}", res.status_code == status and "detail" in res.json(),
               f"HTTP {res.status_code}: {res.json().get('detail')}")
 
@@ -97,7 +118,7 @@ def main() -> int:
     cases = [("JPEG", "photo.jpg", 2), ("PNG", "photo.png", 4), ("WEBP", "photo.webp", 2)]
     sessions = {}
     for fmt, name, scale in cases:
-        s = requests.Session()
+        s = new_session()
         res = upload(s, url, image_bytes(fmt), name, scale)
         check(f"FR-001 приём {fmt}", res.status_code == 202, f"HTTP {res.status_code}")
         if res.status_code == 202:
@@ -110,7 +131,7 @@ def main() -> int:
         res = upload(s, url, image_bytes("JPEG"), "second.jpg")
         check("FR-005 вторая задача сессии отклонена", res.status_code == 429, f"HTTP {res.status_code}")
         # NFR-008: другая сессия не видит задачу и её файлы
-        other = requests.Session()
+        other = new_session()
         codes = [other.get(f"{url}/api/jobs/{job_id}{p}", timeout=10).status_code
                  for p in ("", "/download", "/preview/after")]
         check("NFR-008 изоляция сессий", all(c in (403, 404) for c in codes), f"коды {codes}")

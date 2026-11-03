@@ -30,7 +30,7 @@ services:
       RETENTION_SECONDS: ${RETENTION_SECONDS:-86400}
       BRISQUE_BASELINE: ${BRISQUE_BASELINE:-}
     volumes:
-      - data:/data
+      - jobs:/data
 
   worker:
     build:
@@ -50,7 +50,8 @@ services:
       CLEANUP_INTERVAL_SECONDS: ${CLEANUP_INTERVAL_SECONDS:-600}
       FACE_DETAIL_REDUCTION: ${FACE_DETAIL_REDUCTION:-0.5}
     volumes:
-      - data:/data
+      - jobs:/data
 
 volumes:
-  data:
+  # Имя «jobs» (раньше «data»): новый том создаётся с владельцем app, процессы работают не от root
+  jobs:

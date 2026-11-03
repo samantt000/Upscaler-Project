@@ -1,0 +1,39 @@
+# Обратный прокси режима демонстрации (docker-compose.public.yml).
+# Caddy сам получает HTTPS-сертификат для PUBLIC_DOMAIN (Let's Encrypt, при отказе ZeroSSL)
+# и перенаправляет HTTP на HTTPS.
+
+{$PUBLIC_DOMAIN} {
+	# Служебные страницы из интернета недоступны; автор открывает их на ПК: http://localhost:8000
+	@internal path /metrics /metrics/* /api/metrics /api/docs /api/docs/* /api/openapi.json /invite
+	respond @internal 404
+
+	# Лимит тела запроса до того, как оно дойдёт до API: файл до 10 МБ + служебные поля формы
+	request_body {
+		max_size 11MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		# Ключ из ссылки-приглашения не должен уходить в заголовке Referer
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	encode gzip
+	reverse_proxy api:8000
+
+	# Журнал запросов с реальным IP клиента; ключ из адреса вырезается
+	log {
+		output stdout
+		format filter {
+			wrap console
+			fields {
+				request>uri query {
+					delete key
+				}
+			}
+		}
+	}
+}

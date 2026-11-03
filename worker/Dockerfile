@@ -30,9 +30,15 @@ ADD --checksum=sha256:4c44c7eec9e5139830c0bb0e4a044c9cd351ba5bbc9e3798beca3243e2
     https://raw.githubusercontent.com/opencv/opencv_contrib/4.x/modules/quality/samples/brisque_model_live.yml /models/
 ADD --checksum=sha256:a18427f4f7ad087524bd0d63389649a3899b51ca6d44a4d5f8d8171f1f914a9c \
     https://raw.githubusercontent.com/opencv/opencv_contrib/4.x/modules/quality/samples/brisque_range_live.yml /models/
+# ADD по URL создаёт файлы с правами 600: без этого процесс не от root не прочитает веса
+RUN chmod 755 /models && chmod 644 /models/*
 
 WORKDIR /app
 COPY app ./app
 COPY tools ./tools
+
+# Процесс работает не от root; /data создаётся заранее, чтобы новый том получил этого владельца
+RUN useradd --create-home --uid 10001 app && mkdir -p /data && chown app:app /data
+USER app
 
 CMD ["python", "-m", "app.main"]

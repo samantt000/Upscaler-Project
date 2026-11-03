@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Ссылка-приглашение · Апскейлер</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top__inner">
+      <a class="logo" href="/">Апскейлер</a>
+      <nav><a href="/">Загрузить изображение</a></nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card share">
+      <div class="share__qr">{{qr}}</div>
+      <div class="share__text">
+        <h1 id="qr-title">QR-код для жюри</h1>
+        <p>Вставьте код на слайд. Камера телефона откроет сервис сразу, без ввода пароля.</p>
+        <label class="field-label" for="invite-link">Ссылка-приглашение</label>
+        <div class="copy-row">
+          <input id="invite-link" type="text" value="{{link}}" readonly>
+          <button type="button" class="btn" id="copy-btn">Скопировать</button>
+        </div>
+        <p class="muted" id="copy-status" role="status"></p>
+        <p class="warn-note">Ссылка даёт полный доступ к сервису. Не публикуйте её в открытых чатах.
+          После защиты смените <code>ACCESS_KEY</code> в файле <code>.env</code> и перезапустите сервис:
+          старый код перестанет работать.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    <p>Страница доступна только с этого компьютера: снаружи прокси отвечает на неё 404.</p>
+  </footer>
+
+  <script src="/static/share.js"></script>
+</body>
+</html>

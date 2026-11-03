@@ -3,3 +3,4 @@ uvicorn[standard]==0.32.1
 python-multipart==0.0.19
 pillow==11.0.0
 redis==5.2.0
+qrcode==8.0

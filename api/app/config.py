@@ -22,3 +22,9 @@ RETENTION_SECONDS = int(os.getenv("RETENTION_SECONDS", str(24 * 3600)))
 
 # FR-012: базовая линия BRISQUE для страницы метрик
 BRISQUE_BASELINE = float(os.getenv("BRISQUE_BASELINE") or 0) or None
+
+# Режим демонстрации (CR-2026-004): доступ из интернета только по ссылке с ключом
+ACCESS_KEY = os.getenv("ACCESS_KEY", "").strip() or None
+ACCESS_COOKIE = "access"
+# Адрес сайта снаружи, например https://upscaler.mooo.com: нужен для ссылки и QR-кода на /invite
+PUBLIC_URL = os.getenv("PUBLIC_URL", "").strip().rstrip("/") or None
