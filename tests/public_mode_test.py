@@ -5,7 +5,9 @@
 к собственному белому IP изнутри сети, и результат будет ложным.
 
     pip install -r tests/requirements.txt
-    python tests/public_mode_test.py --domain upscaler.mooo.com --key <ACCESS_KEY>
+    python tests/public_mode_test.py --domain upscaler-ivt.duckdns.org --key <ACCESS_KEY>
+    # если провайдер закрыл 443 и сайт открыт на другом порту:
+    python tests/public_mode_test.py --domain upscaler-ivt.duckdns.org --port 8443 --key <ACCESS_KEY>
 """
 import argparse
 import socket
@@ -33,24 +35,28 @@ def port_closed(host: str, port: int) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--domain", required=True, help="домен без https://, например upscaler.mooo.com")
+    parser.add_argument("--domain", required=True, help="домен без https://, например upscaler-ivt.duckdns.org")
+    parser.add_argument("--port", type=int, default=443, help="внешний порт HTTPS (PUBLIC_PORT из .env)")
     parser.add_argument("--key", required=True, help="ACCESS_KEY из .env")
     parser.add_argument("--insecure", action="store_true", help="не проверять сертификат (только для теста с localhost)")
     args = parser.parse_args()
-    base = f"https://{args.domain}"
+    base = f"https://{args.domain}" + ("" if args.port == 443 else f":{args.port}")
     verify = not args.insecure
     if args.insecure:
         requests.packages.urllib3.disable_warnings()
 
-    # HTTPS и перенаправление с HTTP
-    try:
-        plain = requests.Session()
-        plain.trust_env = verify
-        res = plain.get(f"http://{args.domain}/", allow_redirects=False, timeout=10)
-        check("HTTP перенаправляется на HTTPS", res.status_code in (301, 308)
-              and res.headers.get("Location", "").startswith("https://"), f"HTTP {res.status_code}")
-    except requests.RequestException as e:
-        check("HTTP перенаправляется на HTTPS", False, str(e))
+    # Перенаправление с HTTP (только на стандартном порту: при нестандартном порт 80 не используется)
+    if args.port != 443:
+        print(f"[--] Перенаправление HTTP на HTTPS не проверяется: сайт работает на порту {args.port}")
+    else:
+        try:
+            plain = requests.Session()
+            plain.trust_env = verify
+            res = plain.get(f"http://{args.domain}/", allow_redirects=False, timeout=10)
+            check("HTTP перенаправляется на HTTPS", res.status_code in (301, 308)
+                  and res.headers.get("Location", "").startswith("https://"), f"HTTP {res.status_code}")
+        except requests.RequestException as e:
+            check("HTTP перенаправляется на HTTPS", False, str(e))
     try:
         requests.get(f"{base}/healthz", timeout=10, verify=True)
         check("Сертификат HTTPS действителен", True)

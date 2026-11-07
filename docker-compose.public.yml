@@ -1,7 +1,8 @@
 # Режим демонстрации: доступ из интернета по HTTPS и ссылке-приглашению (NFR-008, CR-2026-004).
 # Подключается поверх основного файла (и GPU-файла):
 #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.public.yml up -d --build
-# На роутере пробрасываются только TCP 80 и 443 на этот ПК. Порт API наружу не открывается.
+# На роутере пробрасывается один порт: внешний PUBLIC_PORT (TCP и UDP) на порт 443 этого ПК.
+# Порт API наружу не открывается.
 
 x-hardening: &hardening
   read_only: true
@@ -13,7 +14,8 @@ x-hardening: &hardening
 
 services:
   caddy:
-    image: caddy:2.8.4-alpine
+    build: ./deploy/caddy
+    image: upscaler-caddy
     restart: unless-stopped
     depends_on:
       - api
@@ -23,8 +25,9 @@ services:
       - "443:443/udp"
     environment:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?Укажите PUBLIC_DOMAIN в .env}
+      DUCKDNS_TOKEN: ${DUCKDNS_TOKEN:?Укажите DUCKDNS_TOKEN в .env}
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       # Сертификаты сохраняются между перезапусками: повторный выпуск упирается в лимиты центра сертификации
       - caddy_data:/data
       - caddy_config:/config
@@ -40,7 +43,8 @@ services:
       - "127.0.0.1:${HOST_PORT:-8000}:8000"
     environment:
       ACCESS_KEY: ${ACCESS_KEY:?Укажите ACCESS_KEY в .env}
-      PUBLIC_URL: https://${PUBLIC_DOMAIN}
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
+      PUBLIC_PORT: ${PUBLIC_PORT:-443}
 
   worker:
     <<: *hardening

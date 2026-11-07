@@ -1,8 +1,13 @@
 # Обратный прокси режима демонстрации (docker-compose.public.yml).
-# Caddy сам получает HTTPS-сертификат для PUBLIC_DOMAIN (Let's Encrypt, при отказе ZeroSSL)
-# и перенаправляет HTTP на HTTPS.
+# Сертификат для PUBLIC_DOMAIN выпускается через проверку DNS в DuckDNS: входящие
+# порты 80 и 443 для этого не нужны. Снаружи сайт открывается на PUBLIC_PORT,
+# который роутер перенаправляет на порт 443 этого ПК.
 
 {$PUBLIC_DOMAIN} {
+	tls {
+		dns duckdns {env.DUCKDNS_TOKEN}
+	}
+
 	# Служебные страницы из интернета недоступны; автор открывает их на ПК: http://localhost:8000
 	@internal path /metrics /metrics/* /api/metrics /api/docs /api/docs/* /api/openapi.json /invite
 	respond @internal 404

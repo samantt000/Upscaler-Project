@@ -14,6 +14,12 @@
 | OpenCV (opencv-contrib-python-headless) | Обработка изображений | Apache-2.0 | https://github.com/opencv/opencv-python |
 | FastAPI, Uvicorn, redis-py, Pillow | Веб-сервис | MIT / BSD-3 / MIT / MIT-CMU | страницы проектов на PyPI и GitHub |
 | Redis 7.2 (`redis:7.2-alpine`) | Очередь задач | BSD-3-Clause (последняя ветка под BSD) | https://github.com/redis/redis/tree/7.2 |
+| Caddy 2.10 | Обратный прокси режима демонстрации | Apache-2.0 | https://github.com/caddyserver/caddy |
+| caddy-dns/duckdns v0.5.0 | Выпуск сертификата через DNS DuckDNS | В репозитории файла лицензии нет (проверено по архиву модуля v0.5.0); **уточнить у автора или в README** | https://github.com/caddy-dns/duckdns |
+| libdns/duckdns v0.3.0 | Клиент API DuckDNS (зависимость модуля) | MIT | https://github.com/libdns/duckdns |
+| qrcode | QR-код ссылки-приглашения | BSD-3-Clause | https://github.com/lincolnloop/python-qrcode |
+| DuckDNS (сервис) | Домен и запись TXT для сертификата; изображения не получает | Бесплатный сервис | https://www.duckdns.org |
+| Let's Encrypt (сервис) | Центр сертификации; изображения не получает | Бесплатный сервис | https://letsencrypt.org |
 | DIV2K | Наборы A и B (оценка) | Только для академических исследований | https://data.vision.ee.ethz.ch/cvl/DIV2K/ |
 | Flickr2K | Лёгкое дообучение (если будет) | Изображения Flickr; исследовательское использование | https://github.com/limbee/NTIRE2017 |
 

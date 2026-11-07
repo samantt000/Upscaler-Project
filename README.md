@@ -93,24 +93,31 @@ docker compose down -v            # остановить и удалить вс�
 
 | Что | Как устроено |
 |---|---|
-| Вход | Ссылка `https://<домен>/?key=<ключ>`: ключ сохраняется в cookie на 7 дней и убирается из адреса. Без ключа открывается страница «Доступ по приглашению» |
+| Вход | Ссылка `https://<домен>:<порт>/?key=<ключ>`: ключ сохраняется в cookie на 7 дней и убирается из адреса. Без ключа открывается страница «Доступ по приглашению» |
 | Служебные страницы | `/metrics`, `/api/metrics`, `/api/docs`, `/api/openapi.json`, `/invite` снаружи отвечают 404. На ПК они открываются по `http://localhost:8000` |
-| Порты | Наружу только 80 и 443 (Caddy). API слушает только `127.0.0.1:8000` |
-| Защита | HTTPS-сертификат выпускается автоматически, HSTS, cookie с флагом `Secure`, лимит запроса 11 МБ на прокси, контейнеры без root и только для чтения |
+| Порты | Наружу один порт `PUBLIC_PORT` (Caddy). API слушает только `127.0.0.1:8000` |
+| Сертификат | Let's Encrypt через проверку DNS в DuckDNS: входящие порты 80 и 443 для выпуска не нужны |
+| Защита | HSTS, HSTS, cookie с флагом `Secure`, лимит запроса 11 МБ на прокси, контейнеры без root и только для чтения |
 | Журналы | Ключ из адреса в журналы не попадает |
 
 ### Настройка (один раз)
 
-1. **Домен.** В FreeDNS создайте запись типа `A` для своего поддомена со значением белого IP
-   (узнать IP: https://2ip.ru). IP статический, поэтому обновлять запись не нужно.
-2. **Постоянный локальный IP ПК.** Узнайте его командой `ipconfig` (IPv4-адрес) и закрепите
+1. **Домен.** На https://www.duckdns.org войдите через GitHub или Google, создайте поддомен
+   (например `upscaler-ivt`) и укажите белый IP (узнать: https://2ip.ru). Скопируйте **token**
+   со страницы DuckDNS: это секрет, он нужен Caddy для выпуска сертификата.
+2. **Внешний порт.** Проверьте на https://2ip.ru/check-port/, открыт ли 443. Многие
+   провайдеры блокируют входящие 80 и 443 на домашних тарифах; тогда возьмите другой
+   открытый порт, например 8443.
+3. **Постоянный локальный IP ПК.** Узнайте его командой `ipconfig` (IPv4-адрес) и закрепите
    за ПК в настройках роутера (раздел DHCP, «резервирование адреса»).
-3. **Проброс портов на роутере.** TCP 80 и TCP 443 на локальный IP ПК. Больше ничего не
-   пробрасывайте: ни 8000, ни 6379, ни 3389 (удалённый рабочий стол).
-4. **Безопасность роутера.** Выключите UPnP, смените пароль администратора, отключите
+4. **Проброс порта на роутере.** Одно правило: внешний порт из шага 2, протокол TCP и UDP,
+   на локальный IP ПК, внутренний порт **443**. Больше ничего не пробрасывайте: ни 8000,
+   ни 6379, ни 3389 (удалённый рабочий стол).
+5. **Безопасность роутера.** Выключите UPnP, смените пароль администратора, отключите
    управление роутером из интернета.
-5. **Файл `.env`.** Заполните `PUBLIC_DOMAIN` (домен без `https://`) и `ACCESS_KEY`. Ключ
-   сгенерируйте в PowerShell: `[guid]::NewGuid().ToString("N")`.
+6. **Файл `.env`.** Заполните `PUBLIC_DOMAIN` (например `upscaler-ivt.duckdns.org`),
+   `PUBLIC_PORT` (порт из шага 2), `DUCKDNS_TOKEN` и `ACCESS_KEY`. Ключ сгенерируйте в
+   PowerShell: `[guid]::NewGuid().ToString("N")`.
 
 ### Запуск и остановка
 
@@ -120,8 +127,9 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.public.yml down           # остановить
 ```
 
-При первом запуске Caddy получает сертификат: в логе появится `certificate obtained successfully`.
-Если Let's Encrypt откажет из-за лимитов общего домена FreeDNS, Caddy сам попробует ZeroSSL.
+При первом запуске Caddy собирается с модулем DuckDNS (пара минут) и получает сертификат:
+в логе появится `certificate obtained successfully`. Если в логе ошибка про DuckDNS или `401`,
+проверьте `DUCKDNS_TOKEN`; если `NXDOMAIN`, проверьте `PUBLIC_DOMAIN`.
 
 ### QR-код для слайда
 
@@ -137,8 +145,8 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose
   обращение к собственному белому IP изнутри сети.
 - Автоматическая проверка, тоже из внешней сети (ноутбук через раздачу с телефона):
   ```powershell
-  python tests/public_mode_test.py --domain <домен> --key <ACCESS_KEY>
-  python tests/acceptance_test.py --url https://<домен> --key <ACCESS_KEY>
+  python tests/public_mode_test.py --domain <домен> --port <PUBLIC_PORT> --key <ACCESS_KEY>
+  python tests/acceptance_test.py --url https://<домен>:<PUBLIC_PORT> --key <ACCESS_KEY>
   ```
 
 ### После защиты
@@ -218,7 +226,7 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm `
 | NFR-001 Время обработки | журнал + `loadtest/locustfile.py`, `tools/eval_metrics.py` |
 | NFR-003 Нагрузка на очередь | `loadtest/locustfile.py` |
 | NFR-004–006 PSNR, SSIM, LPIPS | `worker/tools/eval_metrics.py` |
-| NFR-008 Изоляция данных сессий и режим доступа | `get_own_job` в `api/app/main.py` (чужая задача → 404); по умолчанию порт в `docker-compose.yml`; режим демонстрации: `docker-compose.public.yml`, `deploy/Caddyfile`, `tests/public_mode_test.py` |
+| NFR-008 Изоляция данных сессий и режим доступа | `get_own_job` в `api/app/main.py` (чужая задача → 404); по умолчанию порт в `docker-compose.yml`; режим демонстрации: `docker-compose.public.yml`, `deploy/caddy/`, `tests/public_mode_test.py` |
 | Доступ по ключу демонстрации (CR-2026-004) | `api/app/access.py`, шаблоны `api/app/templates/`, страница `/invite` |
 | NFR-009 Адаптивная вёрстка | `api/app/static/styles.css` |
 | NFR-011 Успешность в пилоте | событие `downloaded` в журнале, «Доля скачиваний» на `/metrics` |

@@ -26,5 +26,11 @@ BRISQUE_BASELINE = float(os.getenv("BRISQUE_BASELINE") or 0) or None
 # Режим демонстрации (CR-2026-004): доступ из интернета только по ссылке с ключом
 ACCESS_KEY = os.getenv("ACCESS_KEY", "").strip() or None
 ACCESS_COOKIE = "access"
-# Адрес сайта снаружи, например https://upscaler.mooo.com: нужен для ссылки и QR-кода на /invite
-PUBLIC_URL = os.getenv("PUBLIC_URL", "").strip().rstrip("/") or None
+# Адрес сайта снаружи для ссылки и QR-кода на /invite. Порт 443 в адрес не пишется,
+# нестандартный (провайдер закрыл 443) добавляется: https://upscaler-ivt.duckdns.org:8443
+PUBLIC_DOMAIN = os.getenv("PUBLIC_DOMAIN", "").strip().rstrip("/") or None
+PUBLIC_PORT = int(os.getenv("PUBLIC_PORT") or 443)
+PUBLIC_URL = (
+    f"https://{PUBLIC_DOMAIN}" + ("" if PUBLIC_PORT == 443 else f":{PUBLIC_PORT}")
+    if PUBLIC_DOMAIN else None
+)
