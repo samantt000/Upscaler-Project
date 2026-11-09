@@ -42,6 +42,14 @@ def image_bytes(fmt: str, size=(320, 240), **params) -> bytes:
     return buf.getvalue()
 
 
+def smooth_image_bytes(size: tuple[int, int]) -> bytes:
+    """Крупная, но хорошо сжимаемая картинка: обработка долгая, а файл всего десятки килобайт."""
+    img = Image.radial_gradient("L").resize(size).convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=85)
+    return buf.getvalue()
+
+
 def upload(session: requests.Session, url: str, data: bytes, name: str, scale: int = 2):
     return session.post(f"{url}/api/jobs", files={"file": (name, data)}, data={"scale": scale}, timeout=60)
 
@@ -63,7 +71,7 @@ def check_session_lock(url: str, timeout: float) -> None:
     первая задача берётся крупной (1600×1600, ×4), а вторая отправляется сразу за ней.
     """
     s = new_session()
-    first = upload(s, url, image_bytes("JPEG", (1600, 1600)), "lock.jpg", scale=4)
+    first = upload(s, url, smooth_image_bytes((1600, 1600)), "lock.jpg", scale=4)
     if first.status_code != 202:
         check("FR-005 вторая задача сессии отклонена", False, f"первая задача не принята: HTTP {first.status_code}")
         return
