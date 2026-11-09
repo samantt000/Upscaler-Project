@@ -150,10 +150,12 @@ def run_reference(args) -> None:
             f"{n} {row[f'psnr_{n}']:.2f} дБ / {row[f'lpips_{n}'] or '—'}" for n in outputs))
 
     write_csv(args.out, rows)
-    print_reference_summary(rows, ["bicubic", *names], {n: up.title for n, up in upscalers.items()})
+    print_reference_summary(rows, ["bicubic", *names], {n: up.title for n, up in upscalers.items()},
+                            degraded=args.degrade)
 
 
-def print_reference_summary(rows: list[dict], names: list[str], titles: dict[str, str]) -> None:
+def print_reference_summary(rows: list[dict], names: list[str], titles: dict[str, str],
+                            degraded: bool = False) -> None:
     mean = lambda k: statistics.fmean(r[k] for r in rows if r.get(k) not in ("", None))  # noqa: E731
     cell = lambda v, width, fmt: (format(v, fmt) if v is not None else "—").rjust(width)  # noqa: E731
     has_lpips = rows[0].get("lpips_bicubic") != ""
@@ -169,15 +171,29 @@ def print_reference_summary(rows: list[dict], names: list[str], titles: dict[str
               f" {cell(p95(times) if times else None, 7, '.2f')}"
               f" {cell(vram, 9, '.0f')}")
 
-    print("\nПороги NFR-004–006 (да/нет) и сравнение с бикубической интерполяцией:")
+    # ЛР №2, раздел 4.1: пороги NFR-004–006 проверяются на наборе A; для набора B порогов нет,
+    # критерий — модель превосходит бикубическую интерполяцию по LPIPS
+    if degraded:
+        print("\nНабор B: абсолютные пороги не применяются. Критерий: LPIPS лучше бикубической интерполяции.")
+    else:
+        print("\nНабор A: пороги NFR-004–006 (да/нет) и сравнение с бикубической интерполяцией:")
+    n_rows = len(rows)
     for n in names[1:]:
-        parts = [f"PSNR {'да' if mean(f'psnr_{n}') >= THRESHOLDS['psnr'] else 'нет'}",
-                 f"SSIM {'да' if mean(f'ssim_{n}') >= THRESHOLDS['ssim'] else 'нет'}"]
+        parts = []
+        if not degraded:
+            parts += [f"PSNR {'да' if mean(f'psnr_{n}') >= THRESHOLDS['psnr'] else 'нет'}",
+                      f"SSIM {'да' if mean(f'ssim_{n}') >= THRESHOLDS['ssim'] else 'нет'}"]
+            if has_lpips:
+                parts.append(f"LPIPS {'да' if mean(f'lpips_{n}') <= THRESHOLDS['lpips'] else 'нет'}")
         if has_lpips:
-            parts.append(f"LPIPS {'да' if mean(f'lpips_{n}') <= THRESHOLDS['lpips'] else 'нет'}")
+            wins = sum(1 for r in rows if r[f"lpips_{n}"] < r["lpips_bicubic"])
+            gain = 1 - mean(f"lpips_{n}") / mean("lpips_bicubic")
+            parts.append(f"LPIPS лучше на {gain:.0%} (на {wins} из {n_rows} изображений)")
+            if degraded:
+                parts.append("критерий " + ("выполнен" if gain > 0 else "НЕ выполнен"))
+        ssim_wins = sum(1 for r in rows if r[f"ssim_{n}"] > r["ssim_bicubic"])
         parts.append(f"PSNR {mean(f'psnr_{n}') - mean('psnr_bicubic'):+.2f} дБ")
-        if has_lpips:
-            parts.append(f"LPIPS лучше на {1 - mean(f'lpips_{n}') / mean('lpips_bicubic'):.0%}")
+        parts.append(f"SSIM {mean(f'ssim_{n}') - mean('ssim_bicubic'):+.4f} (лучше на {ssim_wins} из {n_rows})")
         print(f"{titles[n]:32} " + "; ".join(parts))
 
 
