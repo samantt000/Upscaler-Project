@@ -56,6 +56,32 @@ def wait_done(session: requests.Session, url: str, job_id: str, timeout: float) 
     raise TimeoutError(f"задача {job_id} не завершилась за {timeout} с")
 
 
+def check_session_lock(url: str, timeout: float) -> None:
+    """FR-005: вторая задача той же сессии отклоняется, пока активна первая.
+
+    На GPU маленькая картинка обрабатывается быстрее, чем уходит второй запрос, поэтому
+    первая задача берётся крупной (1600×1600, ×4), а вторая отправляется сразу за ней.
+    """
+    s = new_session()
+    first = upload(s, url, image_bytes("JPEG", (1600, 1600)), "lock.jpg", scale=4)
+    if first.status_code != 202:
+        check("FR-005 вторая задача сессии отклонена", False, f"первая задача не принята: HTTP {first.status_code}")
+        return
+    job_id = first.json()["id"]
+    second = upload(s, url, image_bytes("JPEG"), "second.jpg")
+    status = s.get(f"{url}/api/jobs/{job_id}", timeout=10).json()["status"]
+    if second.status_code == 202 and status == "done":
+        # Первая задача успела завершиться: блокировка снята законно, проверка не состоялась
+        check("FR-005 вторая задача сессии отклонена", False,
+              "не проверено: первая задача завершилась раньше второго запроса")
+        wait_done(s, url, second.json()["id"], timeout)
+    else:
+        check("FR-005 вторая задача сессии отклонена", second.status_code == 429,
+              f"HTTP {second.status_code}, первая задача: {status}")
+    wait_done(s, url, job_id, timeout)
+    s.delete(f"{url}/api/jobs/{job_id}", timeout=10)
+
+
 def check_queue_limit(url: str) -> None:
     """FR-005: при заполненной очереди следующая задача отклоняется.
 
@@ -124,12 +150,11 @@ def main() -> int:
         if res.status_code == 202:
             sessions[name] = (s, res.json()["id"], scale)
 
+    check_session_lock(url, args.timeout)
+
     first_name = next(iter(sessions), None)
     if first_name:
         s, job_id, _ = sessions[first_name]
-        # FR-005: вторая задача той же сессии отклоняется, пока активна первая
-        res = upload(s, url, image_bytes("JPEG"), "second.jpg")
-        check("FR-005 вторая задача сессии отклонена", res.status_code == 429, f"HTTP {res.status_code}")
         # NFR-008: другая сессия не видит задачу и её файлы
         other = new_session()
         codes = [other.get(f"{url}/api/jobs/{job_id}{p}", timeout=10).status_code
