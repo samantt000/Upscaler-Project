@@ -14,12 +14,10 @@ MODELS_DIR = os.getenv("MODELS_DIR", "/models")
 DEVICE = os.getenv("DEVICE", "auto")
 # Размер тайла (px входа). Меньше — меньше памяти, но больше накладных расходов
 TILE_SIZE = int(os.getenv("TILE_SIZE", "256"))
-TILE_PAD = 10
 # Число потоков PyTorch на CPU (0 — по умолчанию PyTorch)
 TORCH_THREADS = int(os.getenv("TORCH_THREADS", "0"))
 
 MODEL_NAME = "Real-ESRGAN x4plus"
-MODEL_FILE = os.path.join(MODELS_DIR, "RealESRGAN_x4plus.pth")
 FACE_MODEL_FILE = os.path.join(MODELS_DIR, "face_detection_yunet_2023mar.onnx")
 BRISQUE_MODEL_FILE = os.path.join(MODELS_DIR, "brisque_model_live.yml")
 BRISQUE_RANGE_FILE = os.path.join(MODELS_DIR, "brisque_range_live.yml")

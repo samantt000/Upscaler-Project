@@ -30,6 +30,11 @@ ADD --checksum=sha256:4c44c7eec9e5139830c0bb0e4a044c9cd351ba5bbc9e3798beca3243e2
     https://raw.githubusercontent.com/opencv/opencv_contrib/4.x/modules/quality/samples/brisque_model_live.yml /models/
 ADD --checksum=sha256:a18427f4f7ad087524bd0d63389649a3899b51ca6d44a4d5f8d8171f1f914a9c \
     https://raw.githubusercontent.com/opencv/opencv_contrib/4.x/modules/quality/samples/brisque_range_live.yml /models/
+# SwinIR-M ×4 (classical и real-world GAN): модели для сравнения в tools.eval_metrics
+ADD --checksum=sha256:129dc773ba2d4c07f3eb0bb116fbe692011b7cc072d9ca12797cd3748198610a \
+    https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/001_classicalSR_DIV2K_s48w8_SwinIR-M_x4.pth /models/
+ADD --checksum=sha256:b9afb61e65e04eb7f8aba5095d070bbe9af28df76acd0c9405aeb33b814bcfc6 \
+    https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x4_GAN.pth /models/
 # ADD по URL создаёт файлы с правами 600: без этого процесс не от root не прочитает веса
 RUN chmod 755 /models && chmod 644 /models/*
 

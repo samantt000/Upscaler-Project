@@ -13,6 +13,7 @@
 import argparse
 import csv
 import glob
+import math
 import os
 import random
 import shutil
@@ -26,9 +27,15 @@ import numpy as np
 from PIL import Image
 
 from app.pipeline import Models, load_rgb, process
+from app.upscaler import MODELS, Upscaler
 
 EXTENSIONS = ("*.png", "*.jpg", "*.jpeg", "*.webp")
 THRESHOLDS = {"psnr": 28.0, "ssim": 0.85, "lpips": 0.25}
+
+
+def p95(sorted_values: list[float]) -> float:
+    """95-й перцентиль методом ближайшего ранга (на малых выборках не занижает значение)."""
+    return sorted_values[max(0, math.ceil(0.95 * len(sorted_values)) - 1)]
 
 
 def list_images(folder: str, limit: int | None) -> list[str]:
@@ -91,13 +98,21 @@ def degrade(lr: np.ndarray, rng: random.Random) -> np.ndarray:
 
 
 def run_reference(args) -> None:
-    models = Models.load()
-    upscaler = models.upscaler
-    lp = Lpips(upscaler.device)
+    import torch  # noqa: PLC0415
+
+    names = list(MODELS) if args.models == "all" else [m.strip() for m in args.models.split(",")]
+    unknown = [n for n in names if n not in MODELS]
+    if unknown:
+        sys.exit(f"Неизвестные модели: {', '.join(unknown)}. Доступны: {', '.join(MODELS)}, all")
+    upscalers = {n: Upscaler(n) for n in names}
+    device = next(iter(upscalers.values())).device
+    cuda = device.type == "cuda"
+    lp = Lpips(device)
     rng = random.Random(args.seed)
     s, rows = args.scale, []
     files = list_images(args.hr_dir, args.limit)
-    print(f"Изображений: {len(files)}, устройство: {upscaler.device_name}, деградация: {args.degrade}")
+    print(f"Изображений: {len(files)}, устройство: {next(iter(upscalers.values())).device_name}, "
+          f"деградация: {args.degrade}, модели: {', '.join(names)}")
 
     for i, path in enumerate(files, 1):
         hr, _ = load_rgb(path)
@@ -107,43 +122,63 @@ def run_reference(args) -> None:
         if args.degrade:
             lr = degrade(lr, rng)
 
-        t0 = time.perf_counter()
-        sr = upscaler.upscale(lr, s)
-        if upscaler.device.type == "cuda":
-            import torch  # noqa: PLC0415
-            torch.cuda.synchronize()
-        seconds = time.perf_counter() - t0
-        bicubic = cv2.resize(lr, (w, h), interpolation=cv2.INTER_CUBIC)
-
         crop = lambda x: x[s:-s, s:-s]  # noqa: E731
         y_hr = crop(to_y(hr))
-        row = {"file": os.path.basename(path), "lr_size": f"{w // s}x{h // s}", "seconds": round(seconds, 3)}
-        for name, img in (("model", sr), ("bicubic", bicubic)):
+        row = {"file": os.path.basename(path), "lr_size": f"{w // s}x{h // s}"}
+        outputs = {"bicubic": (cv2.resize(lr, (w, h), interpolation=cv2.INTER_CUBIC), None, None)}
+        for name, up in upscalers.items():
+            if cuda:
+                torch.cuda.reset_peak_memory_stats()
+            t0 = time.perf_counter()
+            sr = up.upscale(lr, s)
+            if cuda:
+                torch.cuda.synchronize()
+            vram = torch.cuda.max_memory_allocated() / 2**20 if cuda else None
+            outputs[name] = (sr, time.perf_counter() - t0, vram)
+
+        for name, (img, seconds, vram) in outputs.items():
             y = crop(to_y(img))
             row[f"psnr_{name}"] = round(psnr(y, y_hr), 4)
             row[f"ssim_{name}"] = round(ssim(y, y_hr), 4)
             value = lp(crop(img), crop(hr))
             row[f"lpips_{name}"] = round(value, 4) if value is not None else ""
+            if seconds is not None:
+                row[f"sec_{name}"] = round(seconds, 3)
+                row[f"vram_mb_{name}"] = round(vram) if vram is not None else ""
         rows.append(row)
-        print(f"[{i}/{len(files)}] {row['file']}: PSNR {row['psnr_model']:.2f} (бикуб. {row['psnr_bicubic']:.2f}), "
-              f"SSIM {row['ssim_model']:.3f}, LPIPS {row['lpips_model'] or '—'}, {seconds:.2f} с")
+        print(f"[{i}/{len(files)}] {row['file']}: " + "; ".join(
+            f"{n} {row[f'psnr_{n}']:.2f} дБ / {row[f'lpips_{n}'] or '—'}" for n in outputs))
 
     write_csv(args.out, rows)
-    mean = lambda k: statistics.fmean(r[k] for r in rows if r[k] != "")  # noqa: E731
-    print("\n=== Итог ===")
-    for metric in ("psnr", "ssim", "lpips"):
-        if rows[0][f"{metric}_model"] == "":
-            continue
-        m, b = mean(f"{metric}_model"), mean(f"{metric}_bicubic")
-        ok = m >= THRESHOLDS[metric] if metric != "lpips" else m <= THRESHOLDS[metric]
-        sign = "≥" if metric != "lpips" else "≤"
-        print(f"{metric.upper():6} модель {m:.4f} | бикубическая {b:.4f} | порог {sign}{THRESHOLDS[metric]} — "
-              f"{'выполнен' if ok else 'НЕ выполнен'}")
-    gain = mean("psnr_model") - mean("psnr_bicubic")
-    print(f"Выигрыш PSNR над бикубической: {gain:+.2f} дБ "
-          f"({'применение ИИ оправдано' if gain >= 1 else 'меньше 1 дБ — см. критерий отказа от ИИ'})")
-    times = sorted(r["seconds"] for r in rows)
-    print(f"Время модели: среднее {statistics.fmean(times):.2f} с, p95 {times[int(0.95 * (len(times) - 1))]:.2f} с")
+    print_reference_summary(rows, ["bicubic", *names], {n: up.title for n, up in upscalers.items()})
+
+
+def print_reference_summary(rows: list[dict], names: list[str], titles: dict[str, str]) -> None:
+    mean = lambda k: statistics.fmean(r[k] for r in rows if r.get(k) not in ("", None))  # noqa: E731
+    cell = lambda v, width, fmt: (format(v, fmt) if v is not None else "—").rjust(width)  # noqa: E731
+    has_lpips = rows[0].get("lpips_bicubic") != ""
+    print("\n=== Итог (среднее по изображениям) ===")
+    print(f"{'Модель':32} {'PSNR, дБ':>9} {'SSIM':>7} {'LPIPS':>7} {'Время, с':>9} {'p95, с':>7} {'VRAM, МБ':>9}")
+    for n in names:
+        times = sorted(r[f"sec_{n}"] for r in rows) if f"sec_{n}" in rows[0] else []
+        vram = max((r[f"vram_mb_{n}"] for r in rows if r.get(f"vram_mb_{n}") not in ("", None)), default=None)
+        print(f"{titles.get(n, 'Бикубическая интерполяция'):32}"
+              f" {cell(mean(f'psnr_{n}'), 9, '.2f')} {cell(mean(f'ssim_{n}'), 7, '.4f')}"
+              f" {cell(mean(f'lpips_{n}') if has_lpips else None, 7, '.4f')}"
+              f" {cell(statistics.fmean(times) if times else None, 9, '.2f')}"
+              f" {cell(p95(times) if times else None, 7, '.2f')}"
+              f" {cell(vram, 9, '.0f')}")
+
+    print("\nПороги NFR-004–006 (да/нет) и сравнение с бикубической интерполяцией:")
+    for n in names[1:]:
+        parts = [f"PSNR {'да' if mean(f'psnr_{n}') >= THRESHOLDS['psnr'] else 'нет'}",
+                 f"SSIM {'да' if mean(f'ssim_{n}') >= THRESHOLDS['ssim'] else 'нет'}"]
+        if has_lpips:
+            parts.append(f"LPIPS {'да' if mean(f'lpips_{n}') <= THRESHOLDS['lpips'] else 'нет'}")
+        parts.append(f"PSNR {mean(f'psnr_{n}') - mean('psnr_bicubic'):+.2f} дБ")
+        if has_lpips:
+            parts.append(f"LPIPS лучше на {1 - mean(f'lpips_{n}') / mean('lpips_bicubic'):.0%}")
+        print(f"{titles[n]:32} " + "; ".join(parts))
 
 
 def run_no_reference(args) -> None:
@@ -176,7 +211,7 @@ def run_no_reference(args) -> None:
               f"(порог ≥30%, изображений с лицами: {len(faces)})")
     times = sorted(r["total_seconds"] for r in rows)
     print(f"Полное время обработки: среднее {statistics.fmean(times):.2f} с, "
-          f"p95 {times[int(0.95 * (len(times) - 1))]:.2f} с")
+          f"p95 {p95(times):.2f} с")
 
 
 def write_csv(path: str | None, rows: list[dict]) -> None:
@@ -200,6 +235,8 @@ def main() -> None:
     ref.add_argument("--hr-dir", required=True)
     ref.add_argument("--degrade", action="store_true", help="набор B: JPEG + шум")
     ref.add_argument("--seed", type=int, default=42)
+    ref.add_argument("--models", default="realesrgan",
+                     help=f"модели через запятую или all; доступны: {', '.join(MODELS)}")
 
     noref = sub.add_parser("noref", help="набор C: BRISQUE, лица, время")
     noref.add_argument("--dir", required=True)

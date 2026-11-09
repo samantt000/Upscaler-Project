@@ -190,18 +190,23 @@ locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 20 -
 # Набор A: DIV2K-val, PSNR/SSIM/LPIPS против эталона и бикубической интерполяции
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm `
   -v D:/datasets/DIV2K_valid_HR:/eval/hr -v ${PWD}/results:/results worker `
-  python -m tools.eval_metrics ref --hr-dir /eval/hr --limit 100 --out /results/set_a.csv
+  python -m tools.eval_metrics ref --hr-dir /eval/hr --limit 100 --models all --out /results/set_a.csv
 
 # Набор B: то же с JPEG-сжатием и шумом
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm `
   -v D:/datasets/DIV2K_valid_HR:/eval/hr -v ${PWD}/results:/results worker `
-  python -m tools.eval_metrics ref --degrade --hr-dir /eval/hr --limit 100 --out /results/set_b.csv
+  python -m tools.eval_metrics ref --degrade --hr-dir /eval/hr --limit 100 --models all --out /results/set_b.csv
 
 # Набор C: реальные фото — BRISQUE (базовая линия), снижение достройки на лицах, полное время
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm `
   -v D:/datasets/set_c:/eval/c -v ${PWD}/results:/results worker `
   python -m tools.eval_metrics noref --dir /eval/c --out /results/set_c.csv
 ```
+
+`--models all` сравнивает на одном и том же входе Real-ESRGAN x4plus (модель сервиса),
+SwinIR-M classical x4 (обучен на максимум PSNR) и SwinIR-M real-world x4 (GAN), а также
+бикубическую интерполяцию. В конце печатается таблица: PSNR, SSIM, LPIPS, время и пиковая
+видеопамять по каждой модели. Можно указать часть моделей: `--models realesrgan,swinir-classical`.
 
 Среднее BRISQUE по набору C впишите в `.env` как `BRISQUE_BASELINE` и перезапустите сервис:
 после этого страница метрик показывает отклонение от базовой линии (FR-012).
