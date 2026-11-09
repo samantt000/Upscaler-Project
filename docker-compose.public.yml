@@ -1,7 +1,7 @@
 # Режим демонстрации: доступ из интернета по HTTPS и ссылке-приглашению (NFR-008, CR-2026-004).
 # Подключается поверх основного файла (и GPU-файла):
 #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.public.yml up -d --build
-# На роутере пробрасывается один порт: внешний PUBLIC_PORT (TCP и UDP) на порт 443 этого ПК.
+# На роутере пробрасывается один порт: внешний PUBLIC_PORT (TCP) на порт 443 этого ПК.
 # Порт API наружу не открывается.
 
 x-hardening: &hardening
@@ -22,7 +22,6 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "443:443/udp"
     environment:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?Укажите PUBLIC_DOMAIN в .env}
       DUCKDNS_TOKEN: ${DUCKDNS_TOKEN:?Укажите DUCKDNS_TOKEN в .env}
