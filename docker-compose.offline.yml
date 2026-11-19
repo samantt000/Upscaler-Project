@@ -1,0 +1,13 @@
+# ЛР №4, TC-CON-005-01: воркер без выхода в интернет (CON-005 — обработка только на ПК).
+# Воркер подключён только к внутренней сети без маршрута наружу; redis — к обеим сетям,
+# api — к сети по умолчанию (нужна для публикации порта 8000). Подключается поверх основных файлов:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.offline.yml up -d
+services:
+  redis:
+    networks: [default, isolated]
+  worker:
+    networks: [isolated]
+
+networks:
+  isolated:
+    internal: true
