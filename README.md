@@ -182,6 +182,13 @@ python -m locust -f loadtest/locustfile.py --host http://localhost:8000
 python -m locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 20 -r 20 -t 10m --csv results/load
 ```
 
+Если Windows блокирует Locust («Политика управления приложениями заблокировала этот файл»),
+запускайте его в контейнере: ставить ничего не нужно, образ соберётся сам, результаты окажутся в `results/`:
+
+```powershell
+docker compose run --rm loadtest --headless -u 20 -r 20 -t 10m --csv results/load
+```
+
 ### Качество модели (NFR-004–006, FR-006, FR-012)
 
 Скрипт запускается внутри контейнера воркера, чтобы считать на GPU. Пути — пример:

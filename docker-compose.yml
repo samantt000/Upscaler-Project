@@ -53,6 +53,22 @@ services:
     volumes:
       - jobs:/data
 
+  # Нагрузочный тест (NFR-001, NFR-003). Не запускается с сайтом, только по команде:
+  #   docker compose run --rm loadtest --headless -u 5 -r 5 -t 25m --csv results/nfr001_gpu
+  loadtest:
+    build: ./loadtest
+    image: upscaler-loadtest
+    profiles: ["loadtest"]
+    depends_on:
+      - api
+    working_dir: /work
+    volumes:
+      - ./loadtest:/work/loadtest:ro
+      - ./results:/work/results
+    environment:
+      LOAD_IMAGE: ${LOAD_IMAGE:-}
+      LOAD_SCALE: ${LOAD_SCALE:-4}
+
 volumes:
   # Имя «jobs» (раньше «data»): новый том создаётся с владельцем app, процессы работают не от root
   jobs:

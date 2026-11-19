@@ -10,11 +10,13 @@
 (`--ready-timeout`), поэтому их можно запускать сразу после `docker compose up -d`.
 
 ```powershell
-pip install -r tests/requirements.txt -r loadtest/requirements.txt
+python -m pip install -r tests/requirements.txt
 ```
 
-pytest и Locust запускаются через `python -m`: в Windows 11 политика управления приложениями
-(Smart App Control) блокирует неподписанные `pytest.exe` и `locust.exe`, а подписанный `python.exe` — нет.
+pytest запускается через `python -m`: в Windows 11 политика управления приложениями
+(Smart App Control) блокирует неподписанный `pytest.exe`, а подписанный `python.exe` — нет.
+Locust она блокирует целиком (скомпилированные модули gevent), поэтому нагрузочный тест
+запускается в контейнере: `docker compose run --rm loadtest ...` (образ собирается сам при первом запуске).
 
 ## 1. Чистый старт и NFR-013 (TC-NFR-013-01, три раза)
 
@@ -68,18 +70,18 @@ python tests/lr4/make_load_image.py results/load_2000.jpg
 $env:LOAD_IMAGE="results/load_2000.jpg"; $env:LOAD_SCALE="4"
 
 # NFR-001 (GPU): 5 пользователей держат очередь занятой; остановить, когда обработок ≥100
-python -m locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 5 -r 5 -t 25m --csv results/nfr001_gpu
+docker compose run --rm loadtest --headless -u 5 -r 5 -t 25m --csv results/nfr001_gpu
 # в соседнем окне — пик памяти воркера (журнал решений, запись 9):
 docker stats --no-stream upscaler-worker-1
 Invoke-RestMethod http://localhost:8000/api/metrics | ConvertTo-Json -Depth 5 > results/nfr001_gpu_metrics.json
 
 # NFR-003: одиночный запуск (эталон времени), затем 20 одновременных пользователей
-python -m locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 1 -r 1 -t 3m --csv results/nfr003_single
-python -m locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 20 -r 20 -t 15m --csv results/nfr003_20users
+docker compose run --rm loadtest --headless -u 1 -r 1 -t 3m --csv results/nfr003_single
+docker compose run --rm loadtest --headless -u 20 -r 20 -t 15m --csv results/nfr003_20users
 
 # NFR-001 (CPU, справочно): тот же GPU-образ, но расчёт на процессоре; 10 обработок
 $env:DEVICE="cpu"; docker compose up -d
-python -m locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 1 -r 1 -t 30m --csv results/nfr001_cpu
+docker compose run --rm loadtest --headless -u 1 -r 1 -t 30m --csv results/nfr001_cpu
 Remove-Item Env:DEVICE; docker compose up -d
 ```
 Проверить, что воркер действительно на CPU: `docker compose logs worker` → `device: CPU`.
