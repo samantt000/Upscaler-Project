@@ -34,6 +34,9 @@ FACE_ZONE_INDEX_THRESHOLD = float(os.getenv("FACE_ZONE_INDEX_THRESHOLD", "0.15")
 # FR-012: базовая линия BRISQUE (среднее по набору C); пусто — сравнение не выполняется
 BRISQUE_BASELINE = _float_or_none("BRISQUE_BASELINE")
 BRISQUE_DRIFT_THRESHOLD = 0.15
+# Сравнение с базовой линией начинается после стольких задач: среднее по 1–2 картинкам
+# слишком шумное, и одна нетипичная картинка давала ложный сигнал дрейфа
+BRISQUE_DRIFT_MIN_JOBS = int(os.getenv("BRISQUE_DRIFT_MIN_JOBS", "10"))
 
 # FR-010: срок хранения файлов и период проверки
 RETENTION_SECONDS = int(os.getenv("RETENTION_SECONDS", str(24 * 3600)))

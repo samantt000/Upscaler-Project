@@ -52,10 +52,15 @@ class Brisque:
 
 
 class DriftMonitor:
-    """Сравнивает среднее BRISQUE за сеанс работы воркера с базовой линией набора C."""
+    """Сравнивает среднее BRISQUE за сеанс работы воркера с базовой линией набора C.
 
-    def __init__(self, baseline: float | None = config.BRISQUE_BASELINE):
+    Сигнал дрейфа выдаётся не раньше, чем накопится min_jobs задач.
+    """
+
+    def __init__(self, baseline: float | None = config.BRISQUE_BASELINE,
+                 min_jobs: int = config.BRISQUE_DRIFT_MIN_JOBS):
         self.baseline = baseline
+        self.min_jobs = min_jobs
         self.total = 0.0
         self.count = 0
 
@@ -68,5 +73,6 @@ class DriftMonitor:
             deviation = (mean - self.baseline) / self.baseline
             state["baseline"] = self.baseline
             state["deviation"] = round(deviation, 4)
-            state["drift"] = abs(deviation) > config.BRISQUE_DRIFT_THRESHOLD
+            state["drift"] = (self.count >= self.min_jobs
+                              and abs(deviation) > config.BRISQUE_DRIFT_THRESHOLD)
         return state

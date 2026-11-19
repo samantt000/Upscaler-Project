@@ -13,6 +13,7 @@
 """
 import argparse
 import csv
+import datetime
 import io
 import os
 import random
@@ -70,6 +71,37 @@ def verdict(ok: bool) -> str:
     return "Pass" if ok else "Fail"
 
 
+def record_results(path: str | None, test: str, items: list[tuple[str, bool, str]]) -> None:
+    """Дописывает вердикты в общий results/lr4_results.csv (тот же формат, что у pytest).
+
+    items — (тест-кейс, выполнен ли, пояснение); несколько проверок одного тест-кейса
+    объединяются: Fail, если не выполнена хотя бы одна.
+    """
+    if not path:
+        return
+    merged: dict[str, dict] = {}
+    now = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
+    for tc, ok, detail in items:
+        cur = merged.setdefault(tc, {"tc": tc, "status": "Pass", "test": test, "detail": [], "time": now})
+        if not ok:
+            cur["status"] = "Fail"
+        cur["detail"].append(detail)
+    for row in merged.values():
+        row["detail"] = "; ".join(row["detail"])
+
+    rows: dict[str, dict] = {}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8-sig") as f:
+            rows = {r["tc"]: r for r in csv.DictReader(f, delimiter=";")}
+    rows.update(merged)
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=["tc", "status", "test", "detail", "time"], delimiter=";")
+        w.writeheader()
+        w.writerows(sorted(rows.values(), key=lambda r: r["tc"]))
+    print(f"Вердикты по тест-кейсам дописаны в {path}")
+
+
 # --- FR-006 и AI-01 ---
 
 def group_stats(rows: list[dict], key: str) -> dict[str, dict]:
@@ -124,9 +156,11 @@ def run_fairness(args) -> None:
 
     found = [r for r in rows if r["faces"] > 0]
     mean_red = statistics.fmean(r["face_diff_reduction"] for r in found) if found else 0.0
+    fr006_ok = bool(found) and mean_red >= MIN_REDUCTION
+    fr006_text = (f"лицо найдено на {len(found)} из {len(rows)} портретов; среднее снижение {mean_red:.1%} "
+                  f"(порог ≥{MIN_REDUCTION:.0%})")
     print("\n=== TC-FR-006-01: снижение достройки в области лица ===")
-    print(f"Лицо найдено на {len(found)} из {len(rows)} портретов; среднее снижение {mean_red:.1%} "
-          f"(порог ≥{MIN_REDUCTION:.0%}) → {verdict(bool(found) and mean_red >= MIN_REDUCTION)}")
+    print(f"{fr006_text[0].upper()}{fr006_text[1:]} → {verdict(fr006_ok)}")
 
     by_race, by_gender = group_stats(rows, "race"), group_stats(rows, "gender")
     print_groups("=== Группы по расе (разметка FairFace) ===", by_race)
@@ -153,6 +187,8 @@ def run_fairness(args) -> None:
     print("\n=== AI-01: fairness ===")
     for tc, text, ok in checks:
         print(f"{tc}: {text} → {verdict(ok)}")
+    record_results(args.results, "lr4_ml fairness",
+                   [("TC-FR-006-01", fr006_ok, fr006_text), *((tc, ok, text) for tc, text, ok in checks)])
     missed = [r["file"] for r in rows if r["faces"] == 0]
     if missed:
         print(f"\nЛица не найдены ({len(missed)}): {', '.join(missed[:20])}{' …' if len(missed) > 20 else ''}")
@@ -226,10 +262,19 @@ def run_drift(args) -> None:
         alarm = f", первый сигнал на {st['first_alarm']}-м изображении" if st["first_alarm"] else ""
         print(f"{name:10} среднее {st['session_mean']:.3f}, отклонение {st['deviation']:+.1%}, "
               f"дрейф: {'да' if st['drift'] else 'нет'}{alarm}")
-    ok_control = not results["control"]["drift"]
-    ok_shift = bool(results["jpeg_q10"]["drift"])
-    print(f"TC-AI-03-01: сдвиг (JPEG q10) обнаружен → {verdict(ok_shift)}")
-    print(f"TC-AI-03-02: на контрольной партии ложного сигнала нет → {verdict(ok_control)}")
+    # Ложный сигнал — любой сигнал по ходу контрольной партии, а не только итог в её конце
+    ok_control = results["control"]["first_alarm"] is None
+    ok_shift = results["jpeg_q10"]["first_alarm"] is not None
+    shift_text = (f"сдвиг (JPEG q10) обнаружен на {results['jpeg_q10']['first_alarm']}-м изображении"
+                  if ok_shift else "сдвиг (JPEG q10) не обнаружен")
+    control_text = ("на контрольной партии ложных сигналов нет" if ok_control else
+                    f"ложный сигнал на контрольной партии на {results['control']['first_alarm']}-м изображении")
+    print(f"TC-AI-03-01: {shift_text} → {verdict(ok_shift)}")
+    print(f"TC-AI-03-02: {control_text} → {verdict(ok_control)}")
+    record_results(args.results, "lr4_ml drift", [
+        ("TC-AI-03-01", ok_shift, f"{shift_text}; отклонение {results['jpeg_q10']['deviation']:+.1%}"),
+        ("TC-AI-03-02", ok_control, f"{control_text}; отклонение {results['control']['deviation']:+.1%}"),
+    ])
     print(f"Справочно: шум σ=25 → дрейф {'обнаружен' if results['noise_s25']['drift'] else 'не обнаружен'}")
     print(f"\nДля сервиса: BRISQUE_BASELINE={baseline:.3f} (базовая линия по портретам; см. ограничения набора C)")
 
@@ -243,10 +288,14 @@ def main() -> None:
     fair.add_argument("--scale", type=int, default=4, choices=(2, 4))
     fair.add_argument("--limit", type=int, default=None)
     fair.add_argument("--out", default="/results/fairness.csv")
+    fair.add_argument("--results", default="/results/lr4_results.csv",
+                      help="общий файл вердиктов по тест-кейсам; пустая строка — не записывать")
     drift = sub.add_parser("drift", help="AI-03: базовая линия, контрольная и сдвинутые партии")
     drift.add_argument("--dir", required=True)
     drift.add_argument("--seed", type=int, default=42)
     drift.add_argument("--out", default="/results/drift.csv")
+    drift.add_argument("--results", default="/results/lr4_results.csv",
+                       help="общий файл вердиктов по тест-кейсам; пустая строка — не записывать")
     args = parser.parse_args()
     (run_fairness if args.mode == "fairness" else run_drift)(args)
 

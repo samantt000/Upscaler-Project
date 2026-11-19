@@ -9,7 +9,8 @@ services:
         WITH_EVAL: "true"
     image: upscaler-worker:gpu
     environment:
-      DEVICE: cuda
+      # Без DEVICE в окружении — GPU; DEVICE=cpu даёт справочный замер на процессоре
+      DEVICE: ${DEVICE:-cuda}
       TILE_SIZE: ${TILE_SIZE:-512}
     deploy:
       resources:

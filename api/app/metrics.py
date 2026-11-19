@@ -39,7 +39,7 @@ def summary(queue_length: int, processing: int, worker: dict | None) -> dict:
     if config.BRISQUE_BASELINE and brisque_mean is not None:
         deviation = (brisque_mean - config.BRISQUE_BASELINE) / config.BRISQUE_BASELINE
         drift = {"baseline": config.BRISQUE_BASELINE, "deviation": round(deviation, 4),
-                 "drift": abs(deviation) > 0.15}
+                 "drift": len(brisque) >= config.BRISQUE_DRIFT_MIN_JOBS and abs(deviation) > 0.15}
 
     face_jobs = [r for r in done if r.get("faces")]
     reductions = [r["face_diff_reduction"] for r in face_jobs if "face_diff_reduction" in r]

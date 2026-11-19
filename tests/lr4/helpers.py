@@ -18,14 +18,21 @@ FINAL = ("done", "error", "rejected")
 # --- клиент API ---
 
 class Api:
-    def __init__(self, url: str, timeout: float):
+    def __init__(self, url: str, timeout: float, key: str | None = None):
         self.url = url.rstrip("/")
         self.timeout = timeout
+        self.key = key
 
     def session(self) -> requests.Session:
-        """Новая анонимная сессия: cookie sid выдаст сервер при первом запросе."""
+        """Новая анонимная сессия: cookie sid выдаст сервер при первом запросе.
+
+        В режиме демонстрации (задан ACCESS_KEY) сессия сначала открывает ссылку с ключом,
+        как жюри по QR-коду, иначе все запросы получат 401/403.
+        """
         s = requests.Session()
         s.trust_env = False  # прокси из окружения не должен перехватывать localhost
+        if self.key:
+            s.get(f"{self.url}/", params={"key": self.key}, timeout=30)
         return s
 
     def get(self, s: requests.Session, path: str, **kw) -> requests.Response:
@@ -69,8 +76,11 @@ class Api:
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
-                if self.health().status_code == 200:
+                code = self.health().status_code
+                if code == 200:
                     return True
+                if code in (401, 403):  # режим демонстрации без верного ключа: ждать бесполезно
+                    return False
             except requests.RequestException:
                 pass
             time.sleep(2)

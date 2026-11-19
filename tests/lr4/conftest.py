@@ -18,6 +18,9 @@ RESULTS: dict[str, dict] = {}
 def pytest_addoption(parser):
     g = parser.getgroup("lr4")
     g.addoption("--url", default="http://localhost:8000", help="адрес сервиса")
+    g.addoption("--key", default=None, help="ACCESS_KEY, если сервис запущен в режиме демонстрации")
+    g.addoption("--ready-timeout", type=float, default=300,
+                help="сколько ждать готовности сервиса (воркер загружает модели после запуска), с")
     g.addoption("--job-timeout", type=float, default=600, help="ожидание одной обработки, с")
     g.addoption("--compose", default="docker compose",
                 help="команда Docker Compose (с -f ... для GPU-режима, если COMPOSE_FILE не задан в .env)")
@@ -34,10 +37,15 @@ def pytest_configure(config):
 
 @pytest.fixture(scope="session")
 def api(pytestconfig) -> Api:
-    a = Api(pytestconfig.getoption("--url"), pytestconfig.getoption("--job-timeout"))
-    res = a.health()
-    if res.status_code != 200:
-        pytest.exit(f"Сервис не готов: {res.text}", returncode=2)
+    a = Api(pytestconfig.getoption("--url"), pytestconfig.getoption("--job-timeout"),
+            pytestconfig.getoption("--key"))
+    # После docker compose up воркер ещё загружает модели: ждём, а не завершаемся сразу
+    if not a.wait_ready(pytestconfig.getoption("--ready-timeout")):
+        res = a.health()
+        if res.status_code in (401, 403):
+            pytest.exit("Сервис в режиме демонстрации: передайте ключ --key <ACCESS_KEY> "
+                        "или запустите сервис без docker-compose.public.yml", returncode=2)
+        pytest.exit(f"Сервис не готов: HTTP {res.status_code} {res.text[:200]}", returncode=2)
     return a
 
 

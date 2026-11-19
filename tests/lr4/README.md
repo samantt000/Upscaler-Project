@@ -2,7 +2,12 @@
 
 Все команды — в PowerShell из корня репозитория. В `.env` должна быть раскомментирована строка
 `COMPOSE_FILE=docker-compose.yml;docker-compose.gpu.yml`, чтобы `docker compose` работал в GPU-режиме.
-Результаты складываются в `results/` (папка в `.gitignore`).
+Результаты складываются в `results/` (папка в `.gitignore`), см. раздел «Результаты для отчёта».
+
+**Сервис для тестов запускается в обычном режиме**, без `docker-compose.public.yml`. Если он
+работает в режиме демонстрации, добавляйте к каждому `pytest` параметр `--key <ACCESS_KEY>`,
+иначе все запросы получат 401/403. Тесты сами ждут готовности сервиса до 5 минут
+(`--ready-timeout`), поэтому их можно запускать сразу после `docker compose up -d`.
 
 ```powershell
 pip install -r tests/requirements.txt -r loadtest/requirements.txt
@@ -16,6 +21,8 @@ $t = Get-Date; docker compose up -d
 do { Start-Sleep 2; try { $h = Invoke-RestMethod http://localhost:8000/api/health } catch { $h = $null } } until ($h.status -eq "ready")
 "Готов через {0:N0} с" -f ((Get-Date) - $t).TotalSeconds
 docker compose exec worker nvidia-smi --query-gpu=name,memory.used --format=csv
+# если nvidia-smi в контейнере нет (бывает в Docker Desktop), то же самое через PyTorch:
+docker compose exec worker python -c "import torch; print(torch.cuda.get_device_name())"
 ```
 
 ## 2. Системные тесты (34 проверки, ~10–15 мин на GPU)
@@ -67,9 +74,12 @@ Invoke-RestMethod http://localhost:8000/api/metrics | ConvertTo-Json -Depth 5 > 
 locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 1 -r 1 -t 3m --csv results/nfr003_single
 locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 20 -r 20 -t 15m --csv results/nfr003_20users
 
-# NFR-001 (CPU, справочно): $env:DEVICE="cpu"; docker compose up -d; 10 обработок
+# NFR-001 (CPU, справочно): тот же GPU-образ, но расчёт на процессоре; 10 обработок
+$env:DEVICE="cpu"; docker compose up -d
 locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 1 -r 1 -t 30m --csv results/nfr001_cpu
+Remove-Item Env:DEVICE; docker compose up -d
 ```
+Проверить, что воркер действительно на CPU: `docker compose logs worker` → `device: CPU`.
 p95 обработки — строка `processing` в `*_stats.csv` и `processing_time` в /api/metrics.
 
 ## 7. ML-тесты (TC-ML-01, TC-ML-02, TC-FR-006-01, TC-AI-01-*, TC-AI-03-*)
@@ -98,3 +108,22 @@ iex "$run python -m tools.lr4_ml drift --dir /eval/set_c/portraits --out /result
 | TC-CON-001-01 | Сверить docs/LICENSES.md: Real-ESRGAN, YuNet, BRISQUE, SwinIR, DIV2K, FairFace |
 | TC-CON-002-01 | Просмотреть docker-compose*.yml и requirements*.txt: нет платных сервисов |
 | TC-NFR-011-01 | Пилот: ≥5 человек, ≥20 обработок, затем `download_rate` в /api/metrics |
+
+## Результаты для отчёта
+
+Всё лежит в папке `results/` в корне проекта:
+
+| Файл | Откуда | Что внутри |
+|---|---|---|
+| `lr4_results.csv` | pytest (шаги 2–5) и `lr4_ml` (шаг 7) | **Главный файл**: по строке на тест-кейс — `tc;status;test;detail;time` (Pass/Fail/Skip и пояснение). Из него заполняется матрица трассируемости. Каждый следующий прогон дописывает и обновляет строки, старые не теряются |
+| `lr4_system.xml` | pytest с `--junitxml` | Тот же прогон в формате JUnit, по отдельным проверкам (для приложения) |
+| `set_a.csv`, `set_b.csv` | `eval_metrics` (шаг 7) | PSNR, SSIM, LPIPS и время по каждому изображению; итоговая таблица — в выводе консоли |
+| `fairness.csv`, `fairness_groups.csv` | `lr4_ml fairness` | По портретам и по группам (раса, пол): доля найденных лиц, снижение достройки, BRISQUE |
+| `drift.csv` | `lr4_ml drift` | BRISQUE по каждому изображению базовой линии и трёх партий, состояние монитора дрейфа |
+| `nfr001_gpu_stats.csv`, `nfr003_*_stats.csv`, `nfr001_cpu_stats.csv` | Locust (шаг 6) | Строки `processing` (время обработки на сервере) и `end-to-end` (с очередью): среднее, перцентили |
+| `nfr001_gpu_metrics.json` | /api/metrics | p50/p95 по устройству, доля ошибок, распределения входов |
+| `*.txt` | `... \| Tee-Object results/<имя>.txt` | Полный вывод консоли: итоговые таблицы и строки Pass/Fail для ML-тестов |
+
+`lr4_results.csv`, `fairness*.csv` и `drift.csv` записаны в UTF-8 с BOM и разделителем `;`:
+Excel открывает их двойным щелчком. `set_a.csv`, `set_b.csv` и CSV Locust разделены запятыми:
+в Excel их удобнее открыть через «Данные → Из текстового/CSV-файла» с разделителем «запятая».
