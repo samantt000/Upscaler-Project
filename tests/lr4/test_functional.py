@@ -254,6 +254,9 @@ def test_fr005_queue_limit(api, blocker, note):
                 break
         q = api.metrics()["queue"]
         note(f"принято {len(created) + 1} с учётом блокирующей, лимит {limit}")
+        if refused is None and api.status(*blocker)["status"] == "done":
+            pytest.skip("блокирующая задача завершилась раньше, чем заполнилась очередь: проверка не состоялась "
+                        "(медленные запросы? запускайте с --url http://127.0.0.1:8000)")
         assert refused is not None, "очередь не отказала ни разу"
         assert refused.status_code == 503 and refused.json()["reason"] == "queue_full", \
             f"отказ HTTP {refused.status_code} {refused.text[:200]}"

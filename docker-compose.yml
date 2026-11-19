@@ -25,6 +25,8 @@ services:
       # NFR-008: по умолчанию сервис доступен с этого ПК и из локальной сети
       - "${HOST_BIND:-0.0.0.0}:${HOST_PORT:-8000}:8000"
     environment: &common-env
+      # Местное время в журналах и CSV результатов (иначе контейнер пишет по UTC, на 3 ч меньше)
+      TZ: ${TZ:-Europe/Kirov}
       REDIS_URL: redis://redis:6379/0
       DATA_DIR: /data
       RETENTION_SECONDS: ${RETENTION_SECONDS:-86400}
@@ -66,6 +68,7 @@ services:
       - ./loadtest:/work/loadtest:ro
       - ./results:/work/results
     environment:
+      TZ: ${TZ:-Europe/Kirov}
       LOAD_IMAGE: ${LOAD_IMAGE:-}
       LOAD_SCALE: ${LOAD_SCALE:-4}
 

@@ -9,6 +9,12 @@
 иначе все запросы получат 401/403. Тесты сами ждут готовности сервиса до 5 минут
 (`--ready-timeout`), поэтому их можно запускать сразу после `docker compose up -d`.
 
+Адрес по умолчанию — `http://127.0.0.1:8000`, а не `localhost`: в Windows запрос на `localhost`
+сначала уходит на IPv6 и переключается на IPv4 только через ~2 с. С `localhost` каждый запрос
+медленнее на 2 с, и тесты, где важно время (очередь, сессия), дают ложный результат.
+
+Время в `lr4_results.csv` местное (часовой пояс контейнеров — `Europe/Kirov`, переменная `TZ` в `.env`).
+
 ```powershell
 python -m pip install -r tests/requirements.txt
 ```
@@ -23,7 +29,7 @@ Locust она блокирует целиком (скомпилированны�
 ```powershell
 docker compose down -v
 $t = Get-Date; docker compose up -d
-do { Start-Sleep 2; try { $h = Invoke-RestMethod http://localhost:8000/api/health } catch { $h = $null } } until ($h.status -eq "ready")
+do { Start-Sleep 2; try { $h = Invoke-RestMethod http://127.0.0.1:8000/api/health } catch { $h = $null } } until ($h.status -eq "ready")
 "Готов через {0:N0} с" -f ((Get-Date) - $t).TotalSeconds
 docker compose exec worker nvidia-smi --query-gpu=name,memory.used --format=csv
 # если nvidia-smi в контейнере нет (бывает в Docker Desktop), то же самое через PyTorch:
@@ -73,7 +79,7 @@ $env:LOAD_IMAGE="results/load_2000.jpg"; $env:LOAD_SCALE="4"
 docker compose run --rm loadtest --headless -u 5 -r 5 -t 25m --csv results/nfr001_gpu
 # в соседнем окне — пик памяти воркера (журнал решений, запись 9):
 docker stats --no-stream upscaler-worker-1
-Invoke-RestMethod http://localhost:8000/api/metrics | ConvertTo-Json -Depth 5 > results/nfr001_gpu_metrics.json
+Invoke-RestMethod http://127.0.0.1:8000/api/metrics | ConvertTo-Json -Depth 5 > results/nfr001_gpu_metrics.json
 
 # NFR-003: одиночный запуск (эталон времени), затем 20 одновременных пользователей
 docker compose run --rm loadtest --headless -u 1 -r 1 -t 3m --csv results/nfr003_single

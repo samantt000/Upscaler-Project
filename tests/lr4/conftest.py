@@ -17,7 +17,9 @@ RESULTS: dict[str, dict] = {}
 
 def pytest_addoption(parser):
     g = parser.getgroup("lr4")
-    g.addoption("--url", default="http://localhost:8000", help="адрес сервиса")
+    # 127.0.0.1, а не localhost: в Windows запрос на localhost сначала идёт на IPv6 ::1
+    # и переключается на IPv4 только через ~2 с, что ломает тесты, чувствительные ко времени
+    g.addoption("--url", default="http://127.0.0.1:8000", help="адрес сервиса")
     g.addoption("--key", default=None, help="ACCESS_KEY, если сервис запущен в режиме демонстрации")
     g.addoption("--ready-timeout", type=float, default=300,
                 help="сколько ждать готовности сервиса (воркер загружает модели после запуска), с")

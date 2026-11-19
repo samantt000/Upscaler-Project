@@ -2,7 +2,7 @@
 
 Запуск при работающем сервисе:
     pip install -r tests/requirements.txt
-    python tests/acceptance_test.py --url http://localhost:8000
+    python tests/acceptance_test.py --url http://127.0.0.1:8000
     # режим демонстрации (через Caddy, с ключом из .env):
     python tests/acceptance_test.py --url https://<домен> --key <ACCESS_KEY>
 """
@@ -116,7 +116,7 @@ def check_queue_limit(url: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--url", default="http://localhost:8000")
+    parser.add_argument("--url", default="http://127.0.0.1:8000")
     parser.add_argument("--timeout", type=float, default=600, help="ожидание одной обработки, с")
     parser.add_argument("--queue-limit", action="store_true",
                         help="проверить лимит очереди (только локально: снаружи /api/metrics закрыт)")
