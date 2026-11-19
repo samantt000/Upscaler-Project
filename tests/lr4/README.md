@@ -13,6 +13,9 @@
 pip install -r tests/requirements.txt -r loadtest/requirements.txt
 ```
 
+pytest и Locust запускаются через `python -m`: в Windows 11 политика управления приложениями
+(Smart App Control) блокирует неподписанные `pytest.exe` и `locust.exe`, а подписанный `python.exe` — нет.
+
 ## 1. Чистый старт и NFR-013 (TC-NFR-013-01, три раза)
 
 ```powershell
@@ -28,7 +31,7 @@ docker compose exec worker python -c "import torch; print(torch.cuda.get_device_
 ## 2. Системные тесты (34 проверки, ~10–15 мин на GPU)
 
 ```powershell
-pytest tests/lr4 --portrait D:\datasets\set_c\portraits\White_Male_01.png --junitxml results/lr4_system.xml
+python -m pytest tests/lr4 --portrait D:\datasets\set_c\portraits\White_Male_01.png --junitxml results/lr4_system.xml
 ```
 Сводка по тест-кейсам — `results/lr4_results.csv` (Pass/Fail/Skip и пояснение). Ожидаемые Fail
 по журналу решений: TC-SEC-01-02 (нет лимита по IP).
@@ -36,7 +39,7 @@ pytest tests/lr4 --portrait D:\datasets\set_c\portraits\White_Male_01.png --juni
 ## 3. Отказоустойчивость (TC-FR-009-02)
 
 ```powershell
-pytest tests/lr4 -m ops
+python -m pytest tests/lr4 -m ops
 ```
 Ожидается Fail, пока Redis хранит задачи только в памяти (решение 7). После исправления — перезапустить.
 
@@ -44,7 +47,7 @@ pytest tests/lr4 -m ops
 
 ```powershell
 $env:RETENTION_SECONDS=120; $env:CLEANUP_INTERVAL_SECONDS=30; docker compose up -d
-pytest tests/lr4 -m retention
+python -m pytest tests/lr4 -m retention
 Remove-Item Env:RETENTION_SECONDS, Env:CLEANUP_INTERVAL_SECONDS; docker compose up -d
 ```
 
@@ -52,7 +55,7 @@ Remove-Item Env:RETENTION_SECONDS, Env:CLEANUP_INTERVAL_SECONDS; docker compose 
 
 ```powershell
 $env:COMPOSE_FILE="docker-compose.yml;docker-compose.gpu.yml;docker-compose.offline.yml"; docker compose up -d
-pytest tests/lr4 -m offline
+python -m pytest tests/lr4 -m offline
 Remove-Item Env:COMPOSE_FILE; docker compose up -d
 ```
 
@@ -65,18 +68,18 @@ python tests/lr4/make_load_image.py results/load_2000.jpg
 $env:LOAD_IMAGE="results/load_2000.jpg"; $env:LOAD_SCALE="4"
 
 # NFR-001 (GPU): 5 пользователей держат очередь занятой; остановить, когда обработок ≥100
-locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 5 -r 5 -t 25m --csv results/nfr001_gpu
+python -m locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 5 -r 5 -t 25m --csv results/nfr001_gpu
 # в соседнем окне — пик памяти воркера (журнал решений, запись 9):
 docker stats --no-stream upscaler-worker-1
 Invoke-RestMethod http://localhost:8000/api/metrics | ConvertTo-Json -Depth 5 > results/nfr001_gpu_metrics.json
 
 # NFR-003: одиночный запуск (эталон времени), затем 20 одновременных пользователей
-locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 1 -r 1 -t 3m --csv results/nfr003_single
-locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 20 -r 20 -t 15m --csv results/nfr003_20users
+python -m locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 1 -r 1 -t 3m --csv results/nfr003_single
+python -m locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 20 -r 20 -t 15m --csv results/nfr003_20users
 
 # NFR-001 (CPU, справочно): тот же GPU-образ, но расчёт на процессоре; 10 обработок
 $env:DEVICE="cpu"; docker compose up -d
-locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 1 -r 1 -t 30m --csv results/nfr001_cpu
+python -m locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 1 -r 1 -t 30m --csv results/nfr001_cpu
 Remove-Item Env:DEVICE; docker compose up -d
 ```
 Проверить, что воркер действительно на CPU: `docker compose logs worker` → `device: CPU`.

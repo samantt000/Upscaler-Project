@@ -171,7 +171,7 @@ python tests/acceptance_test.py --queue-limit   # дополнительно л�
 
 ```powershell
 pip install -r loadtest/requirements.txt
-locust -f loadtest/locustfile.py --host http://localhost:8000
+python -m locust -f loadtest/locustfile.py --host http://localhost:8000
 ```
 
 Откроется интерфейс Locust на http://localhost:8089: задайте число пользователей и смотрите
@@ -179,7 +179,7 @@ locust -f loadtest/locustfile.py --host http://localhost:8000
 отказов `POST /api/jobs` (HTTP 503 — сработала защита очереди). Без интерфейса, с сохранением CSV:
 
 ```powershell
-locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 20 -r 20 -t 10m --csv results/load
+python -m locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 20 -r 20 -t 10m --csv results/load
 ```
 
 ### Качество модели (NFR-004–006, FR-006, FR-012)
