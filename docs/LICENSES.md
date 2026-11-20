@@ -12,7 +12,9 @@
 | LPIPS | Метрика NFR-006 (только оценка) | BSD-2-Clause | https://github.com/richzhang/PerceptualSimilarity |
 | PyTorch | Инференс | BSD-3-Clause | https://github.com/pytorch/pytorch |
 | OpenCV (opencv-contrib-python-headless) | Обработка изображений | Apache-2.0 | https://github.com/opencv/opencv-python |
-| FastAPI, Uvicorn, redis-py, Pillow | Веб-сервис | MIT / BSD-3 / MIT / MIT-CMU | страницы проектов на PyPI и GitHub |
+| FastAPI, Uvicorn, python-multipart, redis-py, Pillow | Веб-сервис | MIT / BSD-3 / Apache-2.0 / MIT / MIT-CMU | страницы проектов на PyPI и GitHub |
+| Библиотеки CUDA (в GPU-сборке PyTorch) | Расчёт на видеокарте | Проприетарная лицензия NVIDIA, бесплатная | поставляются с PyTorch для CUDA |
+| pytest, requests, Locust, gevent | Только тестирование | MIT / Apache-2.0 / MIT / MIT | страницы проектов на PyPI |
 | Redis 7.2 (`redis:7.2-alpine`) | Очередь задач | BSD-3-Clause (последняя ветка под BSD) | https://github.com/redis/redis/tree/7.2 |
 | Caddy 2.10 | Обратный прокси режима демонстрации | Apache-2.0 | https://github.com/caddyserver/caddy |
 | caddy-dns/duckdns v0.5.0 | Выпуск сертификата через DNS DuckDNS | В репозитории файла лицензии нет (проверено по архиву модуля v0.5.0); **уточнить у автора или в README** | https://github.com/caddy-dns/duckdns |
