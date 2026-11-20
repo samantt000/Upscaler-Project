@@ -34,10 +34,18 @@ class FaceDetector:
         _, found = self.detector.detect(bgr)
         if found is None:
             return []
-        return [
-            Face(int(f[0] / k), int(f[1] / k), int(f[2] / k), int(f[3] / k), float(f[14]))
-            for f in found
-        ]
+        faces = []
+        for f in found:
+            # На очень маленьких входах (16×16 меньше шага сетки YuNet, 32 px) детектор
+            # изредка выдаёт бесконечные или вырожденные рамки: это не лица, отбрасываем
+            if not np.isfinite(f[:4]).all() or not np.isfinite(f[14]):
+                continue
+            x0, y0 = max(0.0, f[0] / k), max(0.0, f[1] / k)
+            x1, y1 = min(float(w), (f[0] + f[2]) / k), min(float(h), (f[1] + f[3]) / k)
+            if x1 - x0 < 1 or y1 - y0 < 1:
+                continue
+            faces.append(Face(int(x0), int(y0), int(x1 - x0), int(y1 - y0), float(f[14])))
+        return faces
 
 
 MASK_MAX = 255
