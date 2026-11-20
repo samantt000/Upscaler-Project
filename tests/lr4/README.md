@@ -26,6 +26,9 @@ Locust она блокирует целиком (скомпилированны�
 
 ## 1. Чистый старт и NFR-013 (TC-NFR-013-01, три раза)
 
+После `git pull` один раз пересоберите образы (`docker compose build`): `up -d` без `--build`
+запускает старые образы. Время сборки в замер NFR-013 не входит.
+
 ```powershell
 docker compose down -v
 $t = Get-Date; docker compose up -d
@@ -76,10 +79,12 @@ Remove-Item Env:COMPOSE_FILE; docker compose up -d
 python tests/lr4/make_load_image.py results/load_2000.jpg
 $env:LOAD_IMAGE="results/load_2000.jpg"; $env:LOAD_SCALE="4"
 
-# NFR-001 (GPU): 5 пользователей держат очередь занятой; остановить, когда обработок ≥100
-docker compose run --rm loadtest --headless -u 5 -r 5 -t 25m --csv results/nfr001_gpu
-# в соседнем окне — пик памяти воркера (журнал решений, запись 9):
-docker stats --no-stream upscaler-worker-1
+# NFR-001 (GPU): 5 пользователей держат очередь занятой. Обработка идёт ~16 с, поэтому
+# ≥100 обработок набирается примерно за 27 мин; 30 мин — с запасом
+docker compose run --rm loadtest --headless -u 5 -r 5 -t 30m --csv results/nfr001_gpu
+# в соседнем окне — память воркера раз в 2 с (журнал решений, запись 9); Ctrl+C после замера,
+# пик — наибольшее значение в файле
+while ($true) { docker stats --no-stream --format "{{.MemUsage}}" upscaler-worker-1 | Add-Content results/mem_worker.txt; Start-Sleep 2 }
 Invoke-RestMethod http://127.0.0.1:8000/api/metrics | ConvertTo-Json -Depth 5 > results/nfr001_gpu_metrics.json
 
 # NFR-003: одиночный запуск (эталон времени), затем 20 одновременных пользователей
