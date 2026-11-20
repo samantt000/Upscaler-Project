@@ -261,5 +261,9 @@ SwinIR-M classical x4 (обучен на максимум PSNR) и SwinIR-M real
   Docker Desktop, проверьте в Settings → General, что включён WSL 2 based engine.
 - `CUDA out of memory` в логах воркера — уменьшите `TILE_SIZE` в `.env` (например, до 256).
 - Порт 8000 занят — поменяйте `HOST_PORT` в `.env`.
+- Воркер перезапускается посреди обработки, в `docker compose ps` у него растёт счётчик
+  перезапусков — не хватило памяти. Docker Desktop по умолчанию даёт WSL 2 половину ОЗУ ПК.
+  Предел воркера задаётся `WORKER_MEM_LIMIT` в `.env` (по умолчанию 6g), память всей виртуальной
+  машины — в файле `%UserProfile%\.wslconfig`: строки `[wsl2]` и `memory=12GB`, затем `wsl --shutdown`.
 - После обновления, где контейнеры перестали работать от root, файлы хранятся в новом томе
   `upscaler_jobs`. Старый том больше не нужен: `docker volume rm upscaler_data`.

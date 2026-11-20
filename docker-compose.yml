@@ -45,6 +45,10 @@ services:
         TORCH_INDEX_URL: https://download.pytorch.org/whl/cpu
     image: upscaler-worker:cpu
     restart: unless-stopped
+    # Предел ОЗУ воркера (запись 9): Docker Desktop по умолчанию отдаёт WSL 2 половину памяти ПК
+    # (8 ГБ из 16). Смешивание в области лица на выходе 8000×8000 теперь занимает около 0,5 ГБ
+    # (было около 3 ГБ), остальное — PyTorch/CUDA и массивы результата
+    mem_limit: ${WORKER_MEM_LIMIT:-6g}
     depends_on:
       redis:
         condition: service_healthy

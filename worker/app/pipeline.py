@@ -9,11 +9,14 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from . import config, moderation
-from .faces import FaceDetector, face_mask
+from .faces import MASK_MAX, FaceDetector, face_mask
 from .quality import Brisque, detail_index, diff_heatmap, diff_map, masked_mean
 from .upscaler import Upscaler
 
 SMALL_INPUT_SIDE = 64
+# Смешивание в области лица идёт полосами: float32-копии всей области лица на выходе
+# 8000×8000 занимали гигабайты (запись 9 журнала решений)
+SOFTEN_STRIP_ROWS = 512
 HIGH_DETAIL_INDEX = 0.35
 
 SAVE_PARAMS = {
@@ -51,17 +54,24 @@ def load_rgb(path: str) -> tuple[np.ndarray, bool]:
 
 
 def soften_faces(result: np.ndarray, bicubic: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    """FR-006: в области лиц приближает результат к бикубическому апскейлу."""
-    ys, xs = np.nonzero(mask > 1e-3)
-    if len(ys) == 0:
+    """FR-006: в области лиц приближает результат к бикубическому апскейлу.
+
+    Изменяет result на месте и возвращает его. Считается полосами по SOFTEN_STRIP_ROWS строк
+    в пределах прямоугольника, где маска не нулевая.
+    """
+    rows = np.flatnonzero(mask.any(axis=1))
+    if len(rows) == 0:
         return result
-    y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
-    k = (mask[y0:y1, x0:x1] * config.FACE_DETAIL_REDUCTION)[..., None]
-    sr = result[y0:y1, x0:x1].astype(np.float32)
-    bc = bicubic[y0:y1, x0:x1].astype(np.float32)
-    out = result.copy()
-    out[y0:y1, x0:x1] = np.clip(sr - k * (sr - bc), 0, 255).round().astype(np.uint8)
-    return out
+    cols = np.flatnonzero(mask.any(axis=0))
+    y0, y1, x0, x1 = rows[0], rows[-1] + 1, cols[0], cols[-1] + 1
+    factor = np.float32(config.FACE_DETAIL_REDUCTION / MASK_MAX)
+    for top in range(y0, y1, SOFTEN_STRIP_ROWS):
+        bottom = min(top + SOFTEN_STRIP_ROWS, y1)
+        k = (mask[top:bottom, x0:x1].astype(np.float32) * factor)[..., None]
+        sr = result[top:bottom, x0:x1].astype(np.float32)
+        bc = bicubic[top:bottom, x0:x1].astype(np.float32)
+        result[top:bottom, x0:x1] = np.clip(sr - k * (sr - bc), 0, 255).round().astype(np.uint8)
+    return result
 
 
 def preview_size(w: int, h: int) -> tuple[int, int]:

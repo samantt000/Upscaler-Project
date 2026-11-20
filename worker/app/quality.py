@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 
 from . import config
+from .faces import MASK_HALF
 
 BRISQUE_MAX_SIDE = 1024
 
@@ -21,12 +22,12 @@ def detail_index(diff: np.ndarray, mask: np.ndarray | None = None) -> float:
     above = diff > config.DIFF_THRESHOLD
     if mask is None:
         return float(above.mean())
-    weight = mask > 0.5
+    weight = mask >= MASK_HALF
     return float(above[weight].mean()) if weight.any() else 0.0
 
 
 def masked_mean(diff: np.ndarray, mask: np.ndarray) -> float:
-    weight = mask > 0.5
+    weight = mask >= MASK_HALF
     return float(diff[weight].mean()) if weight.any() else 0.0
 
 
