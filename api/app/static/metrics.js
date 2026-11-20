@@ -1,7 +1,7 @@
 "use strict";
 
-const fmt = (v, digits = 2, suffix = "") => (v === null || v === undefined ? "—" : `${Number(v).toFixed(digits)}${suffix}`);
-const pct = (v) => (v === null || v === undefined ? "—" : `${(v * 100).toFixed(1)}%`);
+const fmt = (v, digits = 2, suffix = "") => (v === null || v === undefined ? "нет данных" : `${Number(v).toFixed(digits)}${suffix}`);
+const pct = (v) => (v === null || v === undefined ? "нет данных" : `${(v * 100).toFixed(1)}%`);
 
 function card(title, rows) {
   const section = document.createElement("section");
@@ -52,8 +52,8 @@ async function refresh() {
   document.getElementById("metrics").replaceChildren(
     card("Воркер и очередь", [
       ["Состояние", w?.ready ? "готов" : (w ? "загрузка модели" : "нет связи"), w?.ready ? "ok" : "bad"],
-      ["Устройство", w?.device ?? "—"],
-      ["Модель", w?.model ?? "—"],
+      ["Устройство", w?.device ?? "нет данных"],
+      ["Модель", w?.model ?? "нет данных"],
       ["В очереди", String(m.queue.length)],
       ["Обрабатывается", String(m.queue.processing)],
       ["Лимит очереди", String(m.queue.limit)],
@@ -71,7 +71,7 @@ async function refresh() {
       ["Среднее", fmt(m.quality.brisque_mean)],
       ["Задач с оценкой", String(m.quality.brisque_count)],
       ["Базовая линия", drift ? fmt(drift.baseline) : "не задана"],
-      ["Отклонение", drift ? pct(drift.deviation) : "—", drift ? (drift.drift ? "bad" : "ok") : ""],
+      ["Отклонение", drift ? pct(drift.deviation) : "нет данных", drift ? (drift.drift ? "bad" : "ok") : ""],
     ]),
     card("Детектор лиц", [
       ["Задач с лицами", String(m.faces.jobs_with_faces)],

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Апскейлер — увеличение изображений с помощью ИИ</title>
+  <title>Апскейлер: увеличение фото в 2 или 4 раза</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -15,9 +15,19 @@
 
   <main class="wrap">
     <section class="hero">
-      <h1>Увеличение изображений с помощью ИИ</h1>
-      <p>Бесплатно и без регистрации. Модель Real-ESRGAN увеличивает фото в 2 или 4 раза и
-        восстанавливает детали. Файлы обрабатываются локально и удаляются через <span data-retention>24</span> ч.</p>
+      <div>
+        <h1>Увеличьте фото в&nbsp;2 или 4&nbsp;раза</h1>
+        <p class="hero__lead">Модель Real-ESRGAN восстанавливает детали, которых не хватает маленькому
+          или сжатому изображению. Бесплатно и без регистрации, фото обрабатываются на компьютере автора.</p>
+        <div class="motif" aria-hidden="true"></div>
+      </div>
+      <dl class="spec" aria-label="Ограничения сервиса">
+        <div><dt>Форматы</dt><dd id="spec-formats">JPG, PNG, WEBP</dd></div>
+        <div><dt>Размер файла</dt><dd id="spec-size">до 10 МБ</dd></div>
+        <div><dt>Разрешение</dt><dd id="spec-side">до 2000×2000 px</dd></div>
+        <div><dt>Увеличение</dt><dd>×2 или ×4</dd></div>
+        <div><dt>Удаление файлов</dt><dd>через <span data-retention>24</span> ч</dd></div>
+      </dl>
     </section>
 
     <!-- Шаг 1: загрузка (FR-001, FR-002) -->
@@ -31,7 +41,7 @@
           <small id="limits-hint">JPG, PNG, WEBP · до 10 МБ · до 2000×2000 px</small>
         </div>
         <div class="dropzone__file" id="drop-file" hidden>
-          <img id="thumb" alt="Выбранное изображение">
+          <img id="thumb" alt="Выбранное изображение" width="96" height="96">
           <div>
             <strong id="file-name"></strong>
             <span id="file-meta"></span>
@@ -41,13 +51,15 @@
       </label>
 
       <div class="controls">
-        <fieldset class="segmented" id="scale-group">
-          <legend>Увеличение</legend>
-          <label><input type="radio" name="scale" value="2"><span>×2</span></label>
-          <label><input type="radio" name="scale" value="4" checked><span>×4</span></label>
+        <fieldset class="scale" id="scale-group">
+          <legend class="field-label">Увеличение</legend>
+          <div class="segmented">
+            <label><input type="radio" name="scale" value="2"><span>×2</span></label>
+            <label><input type="radio" name="scale" value="4" checked><span>×4</span></label>
+          </div>
         </fieldset>
         <span class="out-size" id="out-size"></span>
-        <button class="btn btn--primary" id="start-btn" disabled>Улучшить</button>
+        <button type="button" class="btn btn--primary" id="start-btn" disabled>Улучшить</button>
       </div>
       <p class="error" id="upload-error" role="alert" hidden></p>
     </section>
@@ -67,27 +79,31 @@
     <!-- Шаг 3: результат (FR-004, FR-006, FR-009) -->
     <section class="card" id="result-card" hidden>
       <div class="result__head">
-        <div class="tabs" role="tablist">
-          <button role="tab" class="tab is-active" data-view="compare" aria-selected="true">До / после</button>
-          <button role="tab" class="tab" data-view="diff" aria-selected="false">Карта изменений</button>
+        <div class="tabs" role="tablist" aria-label="Вид результата">
+          <button type="button" role="tab" class="tab is-active" id="tab-compare" data-view="compare"
+                  aria-selected="true" aria-controls="view-compare">До / после</button>
+          <button type="button" role="tab" class="tab" id="tab-diff" data-view="diff"
+                  aria-selected="false" aria-controls="view-diff" tabindex="-1">Карта изменений</button>
         </div>
         <span class="badge badge--warn" id="face-flag" hidden>Зона активной генерации деталей</span>
       </div>
 
-      <div class="viewer" id="view-compare">
+      <!-- width/height задают пропорции до загрузки превью (без скачка страницы), app.js ставит реальные -->
+      <div class="viewer" id="view-compare" role="tabpanel" aria-labelledby="tab-compare">
         <div class="compare" id="compare">
-          <img id="img-after" alt="После обработки">
-          <div class="compare__before"><img id="img-before" alt="До обработки (бикубическое увеличение)"></div>
+          <img id="img-after" alt="После обработки" width="1600" height="1200">
+          <div class="compare__before"><img id="img-before" alt="До обработки (бикубическое увеличение)" width="1600" height="1200"></div>
           <div class="compare__handle" aria-hidden="true"></div>
           <span class="compare__label compare__label--l">До</span>
           <span class="compare__label compare__label--r">После</span>
           <input type="range" min="0" max="100" value="50" id="compare-range" aria-label="Положение разделителя «до/после»">
         </div>
       </div>
-      <div class="viewer" id="view-diff" hidden>
-        <img id="img-diff" class="diff" alt="Карта изменений">
-        <p class="legend"><span class="legend__bar"></span>Тёмное — результат близок к обычному увеличению; яркое — детали достроены моделью.</p>
+      <div class="viewer" id="view-diff" role="tabpanel" aria-labelledby="tab-diff" hidden>
+        <img id="img-diff" class="diff" alt="Карта изменений" width="1600" height="1200">
+        <p class="legend"><span class="legend__bar" aria-hidden="true"></span>Тёмное: результат близок к обычному увеличению. Яркое: детали достроены моделью.</p>
       </div>
+      <p class="error" id="preview-error" role="alert" hidden></p>
 
       <dl class="stats" id="stats"></dl>
 
@@ -95,8 +111,8 @@
 
       <div class="actions">
         <a class="btn btn--primary" id="download-btn" href="#">Скачать результат</a>
-        <button class="btn" id="new-btn">Новое изображение</button>
-        <button class="btn btn--ghost" id="delete-btn">Удалить файлы сейчас</button>
+        <button type="button" class="btn" id="new-btn">Новое изображение</button>
+        <button type="button" class="btn btn--ghost" id="delete-btn">Удалить файлы сейчас</button>
       </div>
       <p class="muted" id="expires"></p>
     </section>

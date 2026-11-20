@@ -184,7 +184,7 @@ async function poll(restoring = false) {
   if (job.status === "queued") {
     const pos = job.position ? `: позиция ${job.position}` : "";
     setProgress(`${STATUS_TEXT.queued}${pos}`, null,
-      "Задачи обрабатываются по одной. Страницу можно не закрывать — результат появится здесь.");
+      "Задачи обрабатываются по одной. Страницу можно не закрывать: результат появится здесь.");
   } else if (job.status === "processing") {
     setProgress(STATUS_TEXT.processing, job.progress,
       "Модель обрабатывает изображение по фрагментам.");
@@ -214,11 +214,21 @@ function stat(label, value) {
   return div;
 }
 
+// Превью сохраняются с длинной стороной не больше 1600 px (worker/app/config.py, PREVIEW_MAX_SIDE)
+const PREVIEW_MAX_SIDE = 1600;
+
 function renderResult(job) {
   const res = job.result;
-  $("img-before").src = job.files.before;
-  $("img-after").src = job.files.after;
-  $("img-diff").src = job.files.diff;
+  // Размеры превью заранее: место под картинку резервируется, и страница не «прыгает»
+  const k = Math.min(1, PREVIEW_MAX_SIDE / Math.max(res.out_width, res.out_height));
+  const pw = Math.max(1, Math.round(res.out_width * k)), ph = Math.max(1, Math.round(res.out_height * k));
+  $("preview-error").hidden = true;
+  for (const [id, kind] of [["img-before", "before"], ["img-after", "after"], ["img-diff", "diff"]]) {
+    const img = $(id);
+    img.width = pw;
+    img.height = ph;
+    img.src = job.files[kind];
+  }
   $("download-btn").href = job.files.download;
   $("face-flag").hidden = !res.flag_face_zone;
 
@@ -227,7 +237,7 @@ function renderResult(job) {
     stat("Увеличение", `×${job.scale}`),
     stat("Время обработки", `${res.total_seconds.toFixed(1)} с`),
     stat("Индекс достройки", `${(res.detail_index * 100).toFixed(1)}%`),
-    stat("BRISQUE (меньше — лучше)", res.brisque.toFixed(1)),
+    stat("BRISQUE (чем меньше, тем лучше)", res.brisque.toFixed(1)),
     stat("Лиц обнаружено", String(res.faces)),
   );
 
@@ -251,11 +261,14 @@ function renderResult(job) {
   show("result-card");
 }
 
-function setView(view) {
+function setView(view, focus = false) {
   for (const tab of document.querySelectorAll(".tab")) {
     const active = tab.dataset.view === view;
     tab.classList.toggle("is-active", active);
     tab.setAttribute("aria-selected", String(active));
+    // Вкладки как единый элемент: Tab попадает на выбранную, стрелки переключают
+    tab.tabIndex = active ? 0 : -1;
+    if (active && focus) tab.focus();
   }
   $("view-compare").hidden = view !== "compare";
   $("view-diff").hidden = view !== "diff";
@@ -286,8 +299,25 @@ async function deleteJob() {
 }
 
 function initResult() {
-  for (const tab of document.querySelectorAll(".tab")) {
+  const tabs = [...document.querySelectorAll(".tab")];
+  for (const tab of tabs) {
     tab.addEventListener("click", () => setView(tab.dataset.view));
+    tab.addEventListener("keydown", (e) => {
+      const i = tabs.indexOf(tab);
+      const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (next === undefined) return;
+      e.preventDefault();
+      setView(tabs[(next + tabs.length) % tabs.length].dataset.view, true);
+    });
+  }
+  // Превью могло не загрузиться: файлы удалены или истёк срок хранения
+  for (const id of ["img-before", "img-after", "img-diff"]) {
+    $(id).addEventListener("error", () => {
+      if (!$(id).getAttribute("src")) return;
+      $("preview-error").textContent = "Превью не загрузилось: файлы удалены или истёк срок хранения. " +
+        "Загрузите изображение заново.";
+      $("preview-error").hidden = false;
+    });
   }
   $("compare-range").addEventListener("input", (e) => setCompare(Number(e.target.value)));
   $("new-btn").addEventListener("click", newImage);
@@ -303,6 +333,9 @@ async function init() {
     state.config = await api("/api/config");
     const { formats, max_file_mb, max_side, retention_hours } = state.config;
     $("limits-hint").textContent = `${formats.join(", ")} · до ${max_file_mb} МБ · до ${max_side}×${max_side} px`;
+    $("spec-formats").textContent = formats.join(", ");
+    $("spec-size").textContent = `до ${max_file_mb} МБ`;
+    $("spec-side").textContent = `до ${max_side}×${max_side} px`;
     for (const el of document.querySelectorAll("[data-retention]")) el.textContent = String(retention_hours);
   } catch { /* остаются значения по умолчанию */ }
 
