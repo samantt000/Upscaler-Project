@@ -134,6 +134,7 @@ def client_config():
         "formats": ["JPG", "PNG", "WEBP"],
         "scales": list(config.ALLOWED_SCALES),
         "retention_hours": round(config.RETENTION_SECONDS / 3600, 2),
+        "retention_seconds": config.RETENTION_SECONDS,
     }
 
 

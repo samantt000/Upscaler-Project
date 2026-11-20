@@ -49,7 +49,9 @@ def test_fr009_result_survives_redis_restart(api, compose, note):
 @pytest.mark.retention
 @pytest.mark.tc("TC-FR-010-01")
 def test_fr010_files_removed_after_retention(api, compose, note):
-    retention = api.get(api.session(), "/api/config").json()["retention_hours"] * 3600
+    cfg = api.get(api.session(), "/api/config").json()
+    # retention_hours округлён до 0,01 ч (120 с → 108 с), поэтому берём точное значение
+    retention = cfg.get("retention_seconds", cfg["retention_hours"] * 3600)
     if retention > 600:
         pytest.skip(f"срок хранения {retention:.0f} с: перезапустите сервис с RETENTION_SECONDS=120")
     env = compose.exec("worker", "printenv", "CLEANUP_INTERVAL_SECONDS")
