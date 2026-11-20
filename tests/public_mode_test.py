@@ -103,9 +103,16 @@ def main() -> int:
         check(f"Заголовок {name}", expected in headers.get(name, ""), headers.get(name, "нет"))
     check("Версия сервера не раскрывается", "Server" not in headers, headers.get("Server", ""))
 
-    # Лимит тела запроса на прокси
-    res = s.post(f"{base}/api/jobs", files={"file": ("big.jpg", b"0" * (12 * 1024 * 1024))}, timeout=60)
-    check("Запрос больше 11 МБ отсекается прокси", res.status_code == 413, f"HTTP {res.status_code}")
+    # Лимит тела запроса на прокси. На медленном канале (мобильный интернет) Caddy отвечает 413
+    # и закрывает соединение, не дожидаясь конца загрузки, поэтому клиент видит обрыв: это тоже отказ
+    try:
+        res = s.post(f"{base}/api/jobs", files={"file": ("big.jpg", b"0" * (12 * 1024 * 1024))}, timeout=120)
+        rejected, detail = res.status_code == 413, f"HTTP {res.status_code}"
+    except requests.ConnectionError:
+        rejected, detail = True, "прокси закрыл соединение до конца загрузки"
+    alive = s.get(f"{base}/healthz", timeout=10).status_code == 200
+    check("Запрос больше 11 МБ отсекается прокси", rejected and alive,
+          detail + ("" if alive else "; после этого сервис не отвечает"))
 
     # Из интернета открыты только 80 и 443
     for port in CLOSED_PORTS:
