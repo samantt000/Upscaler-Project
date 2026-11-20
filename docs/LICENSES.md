@@ -20,12 +20,15 @@
 | qrcode | QR-код ссылки-приглашения | BSD-3-Clause | https://github.com/lincolnloop/python-qrcode |
 | DuckDNS (сервис) | Домен и запись TXT для сертификата; изображения не получает | Бесплатный сервис | https://www.duckdns.org |
 | Let's Encrypt (сервис) | Центр сертификации; изображения не получает | Бесплатный сервис | https://letsencrypt.org |
+| FairFace (140 портретов, 448×448) | Набор C: FR-006, fairness (AI-01), дрейф (AI-03); только оценка | CC BY 4.0 | https://github.com/joojs/fairface |
 | DIV2K | Наборы A и B (оценка) | Только для академических исследований | https://data.vision.ee.ethz.ch/cvl/DIV2K/ |
 | Flickr2K | Лёгкое дообучение (если будет) | Изображения Flickr; исследовательское использование | https://github.com/limbee/NTIRE2017 |
 
 Замечания:
 
 - Сервис бесплатный и некоммерческий, поэтому ограничение DIV2K «только для исследований»
-  не нарушается (CON-008). Изображения DIV2K в репозиторий и образы не включаются.
+  не нарушается (CON-008). Изображения DIV2K и FairFace в репозиторий и образы не включаются.
+- FairFace (CC BY 4.0) требует указать авторство: Kärkkäinen K., Joo J. FairFace: Face Attribute
+  Dataset for Balanced Race, Gender, and Age. WACV 2021.
 - Redis закреплён на ветке 7.2: начиная с 7.4 лицензия сменилась на RSALv2/SSPLv1.
 - Изображения пользователей для обучения не используются и удаляются через 24 часа (FR-010).

@@ -16,6 +16,9 @@ QUEUE_KEY = "queue:jobs"
 PROCESSING_KEY = "jobs:processing"
 HEARTBEAT_KEY = "worker:heartbeat"
 HEARTBEAT_TTL = 30
+# Каталог без записи в Redis младше этого возраста не трогаем: API создаёт каталог
+# чуть раньше записи задачи, и свежая загрузка могла бы быть принята за сироту
+ORPHAN_MIN_AGE_SECONDS = 60
 
 # Снимает блокировку сессии, только если она принадлежит этой задаче (FR-005)
 RELEASE_SESSION = """
@@ -55,6 +58,24 @@ class Worker:
             self.finish(job_id, {"status": "error", "error": "Обработка прервана перезапуском сервиса"})
             journal.write("job_error", job_id=job_id, error="worker restart")
         self.r.delete(PROCESSING_KEY)
+        self.remove_orphans()
+
+    def remove_orphans(self) -> None:
+        """Каталоги задач, о которых Redis ничего не знает (запись потеряна), удаляются сразу,
+        а не ждут срока хранения: отдать их пользователю всё равно нельзя."""
+        root = os.path.join(config.DATA_DIR, "jobs")
+        if not os.path.isdir(root):
+            return
+        now, removed = time.time(), 0
+        for job_id in os.listdir(root):
+            path = os.path.join(root, job_id)
+            if self.r.exists(f"job:{job_id}") or now - os.path.getmtime(path) < ORPHAN_MIN_AGE_SECONDS:
+                continue
+            shutil.rmtree(path, ignore_errors=True)
+            removed += 1
+        if removed:
+            journal.write("orphans_removed", removed=removed)
+            log.info("removed %d orphan job dir(s)", removed)
 
     def cleanup(self) -> None:
         """FR-010: удаление исходных и обработанных файлов старше срока хранения."""
@@ -155,21 +176,33 @@ class Worker:
                       moderation="stub" if not moderation.ENABLED else "on")
         self.recover()
         while True:
-            self.cleanup()
-            item = self.r.blpop(QUEUE_KEY, timeout=5)
-            if item:
-                self.handle(item[1], models)
+            try:
+                self.cleanup()
+                item = self.r.blpop(QUEUE_KEY, timeout=5)
+                if item:
+                    self.handle(item[1], models)
+            except (redis.ConnectionError, redis.TimeoutError) as e:
+                # Redis перезапускается: ждём его, не роняя процесс (модели остаются загруженными).
+                # Задача, прерванная обрывом связи, после переподключения помечается ошибкой
+                log.warning("redis unavailable (%s), waiting to reconnect", e)
+                wait_for_redis(self.r)
+                journal.write("redis_reconnect")
+                self.recover()
+
+
+def wait_for_redis(r: redis.Redis) -> None:
+    while True:
+        try:
+            r.ping()
+            return
+        except (redis.ConnectionError, redis.TimeoutError):
+            time.sleep(1)
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     r = redis.Redis.from_url(config.REDIS_URL, decode_responses=True)
-    for _ in range(30):
-        try:
-            r.ping()
-            break
-        except redis.ConnectionError:
-            time.sleep(1)
+    wait_for_redis(r)
     Worker(r).run()
 
 

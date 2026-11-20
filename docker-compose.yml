@@ -5,9 +5,12 @@ name: upscaler
 services:
   redis:
     image: redis:7.2-alpine
-    # Очередь и состояние задач в памяти: данные не переживают перезапуск, и это намеренно (FR-010)
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # Состояние задач пишется на диск (AOF, раз в секунду), чтобы после перезапуска Redis
+    # готовые результаты оставались доступны (TC-FR-009-02). Срок хранения задаёт TTL ключей (FR-010)
+    command: ["redis-server", "--save", "", "--appendonly", "yes", "--appendfsync", "everysec"]
     restart: unless-stopped
+    volumes:
+      - redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -73,5 +76,6 @@ services:
       LOAD_SCALE: ${LOAD_SCALE:-4}
 
 volumes:
+  redis:
   # Имя «jobs» (раньше «data»): новый том создаётся с владельцем app, процессы работают не от root
   jobs:

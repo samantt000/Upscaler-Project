@@ -39,7 +39,7 @@ def test_fr009_result_survives_redis_restart(api, compose, note):
     note(f"после перезапуска: статус HTTP {status}, скачивание HTTP {download}, файлы на диске: {'да' if exists else 'нет'}")
     try:
         assert status == 200 and download == 200, \
-            "после перезапуска redis задача и ссылка недоступны (состояние задач хранится только в памяти)"
+            "после перезапуска redis задача и ссылка недоступны (состояние задач не сохранилось)"
     finally:
         if status == 200:
             api.delete(s, job["id"])
