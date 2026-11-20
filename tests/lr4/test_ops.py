@@ -12,6 +12,7 @@ import threading
 import time
 
 import pytest
+import requests
 
 import helpers as h
 
@@ -62,7 +63,14 @@ def test_fr010_files_removed_after_retention(api, compose, note):
 
     gone_at = None
     while time.time() < deadline + 60:
-        if api.get(s, link).status_code == 404:
+        # Только заголовки ответа (stream=True, тело не читается): иначе очистка может удалить
+        # файл посреди скачивания, и обрыв передачи ронял тест (IncompleteRead), а не сервис
+        try:
+            with api.get(s, link, stream=True) as r:
+                status = r.status_code
+        except requests.RequestException:
+            status = None
+        if status == 404:
             gone_at = time.time()
             break
         time.sleep(3)

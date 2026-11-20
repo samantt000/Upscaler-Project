@@ -217,18 +217,24 @@ def add_noise(data: bytes, sigma: float, seed: int) -> bytes:
     return buf.getvalue()
 
 
-def feed(models, baseline: float, batch: list[tuple[str, bytes, str]], name: str, rows: list) -> dict:
+def feed(models, baselines: tuple[float, float], batch: list[tuple[str, bytes, str]], name: str,
+         rows: list) -> dict:
     """Новый монитор (как после перезапуска воркера) получает партию изображений по одному."""
-    monitor = DriftMonitor(baseline)
-    first_alarm, state = None, {}
+    monitor = DriftMonitor(*baselines)
+    first_alarm, alarm_source, state = None, [], {}
     for i, (file, data, fmt) in enumerate(batch, 1):
         res = run_pipeline(models, data, fmt)
-        state = monitor.add(res["brisque"])
+        state = monitor.add(res["brisque"], res["brisque_input"])
         if state.get("drift") and first_alarm is None:
-            first_alarm = i
-        rows.append({"batch": name, "file": file, "brisque": res["brisque"], **state})
-    state["first_alarm"] = first_alarm
+            first_alarm, alarm_source = i, state["drift_source"]
+        rows.append({"batch": name, "file": file, "brisque": res["brisque"],
+                     "brisque_input": res["brisque_input"], **state})
+    state["first_alarm"], state["alarm_source"] = first_alarm, alarm_source
     return state
+
+
+def describe(st: dict) -> str:
+    return (f"отклонение выхода {st['deviation']:+.1%}, входа {st['input_deviation']:+.1%}")
 
 
 def run_drift(args) -> None:
@@ -239,14 +245,16 @@ def run_drift(args) -> None:
     print(f"Базовая часть: {len(base)}, контрольная партия: {len(control)}, устройство: {models.upscaler.device_name}")
 
     rows = []
-    scores = []
+    out_scores, in_scores = [], []
     for file in base:
         data, fmt = read_file(os.path.join(args.dir, file))
         res = run_pipeline(models, data, fmt)
-        scores.append(res["brisque"])
-        rows.append({"batch": "baseline", "file": file, "brisque": res["brisque"]})
-    baseline = statistics.fmean(scores)
-    print(f"Базовая линия BRISQUE (среднее по {len(base)} портретам): {baseline:.3f}")
+        out_scores.append(res["brisque"])
+        in_scores.append(res["brisque_input"])
+        rows.append({"batch": "baseline", "file": file, "brisque": res["brisque"],
+                     "brisque_input": res["brisque_input"]})
+    baseline, input_baseline = statistics.fmean(out_scores), statistics.fmean(in_scores)
+    print(f"Базовые линии BRISQUE по {len(base)} портретам: выход {baseline:.3f}, вход {input_baseline:.3f}")
 
     raw = [(f, *read_file(os.path.join(args.dir, f))) for f in control]
     batches = {
@@ -254,29 +262,33 @@ def run_drift(args) -> None:
         "jpeg_q10": [(f, recompress(d, 10), "jpg") for f, d, _ in raw],
         "noise_s25": [(f, add_noise(d, 25, i), "png") for i, (f, d, _) in enumerate(raw)],
     }
-    results = {name: feed(models, baseline, batch, name, rows) for name, batch in batches.items()}
+    results = {name: feed(models, (baseline, input_baseline), batch, name, rows)
+               for name, batch in batches.items()}
     write_csv(args.out, rows)
 
-    print("\n=== AI-03: обнаружение дрейфа (порог отклонения 15%) ===")
+    print("\n=== AI-03: обнаружение дрейфа (порог отклонения 15%, сигнал не раньше "
+          f"{DriftMonitor().min_jobs}-й задачи) ===")
     for name, st in results.items():
-        alarm = f", первый сигнал на {st['first_alarm']}-м изображении" if st["first_alarm"] else ""
-        print(f"{name:10} среднее {st['session_mean']:.3f}, отклонение {st['deviation']:+.1%}, "
-              f"дрейф: {'да' if st['drift'] else 'нет'}{alarm}")
+        alarm = (f", первый сигнал на {st['first_alarm']}-м изображении (по: {', '.join(st['alarm_source'])})"
+                 if st["first_alarm"] else "")
+        print(f"{name:10} {describe(st)}, дрейф: {'да' if st['first_alarm'] else 'нет'}{alarm}")
     # Ложный сигнал — любой сигнал по ходу контрольной партии, а не только итог в её конце
     ok_control = results["control"]["first_alarm"] is None
     ok_shift = results["jpeg_q10"]["first_alarm"] is not None
-    shift_text = (f"сдвиг (JPEG q10) обнаружен на {results['jpeg_q10']['first_alarm']}-м изображении"
-                  if ok_shift else "сдвиг (JPEG q10) не обнаружен")
+    shift = results["jpeg_q10"]
+    shift_text = (f"сдвиг (JPEG q10) обнаружен на {shift['first_alarm']}-м изображении "
+                  f"(по: {', '.join(shift['alarm_source'])})" if ok_shift else "сдвиг (JPEG q10) не обнаружен")
     control_text = ("на контрольной партии ложных сигналов нет" if ok_control else
                     f"ложный сигнал на контрольной партии на {results['control']['first_alarm']}-м изображении")
     print(f"TC-AI-03-01: {shift_text} → {verdict(ok_shift)}")
     print(f"TC-AI-03-02: {control_text} → {verdict(ok_control)}")
     record_results(args.results, "lr4_ml drift", [
-        ("TC-AI-03-01", ok_shift, f"{shift_text}; отклонение {results['jpeg_q10']['deviation']:+.1%}"),
-        ("TC-AI-03-02", ok_control, f"{control_text}; отклонение {results['control']['deviation']:+.1%}"),
+        ("TC-AI-03-01", ok_shift, f"{shift_text}; {describe(shift)}"),
+        ("TC-AI-03-02", ok_control, f"{control_text}; {describe(results['control'])}"),
     ])
-    print(f"Справочно: шум σ=25 → дрейф {'обнаружен' if results['noise_s25']['drift'] else 'не обнаружен'}")
-    print(f"\nДля сервиса: BRISQUE_BASELINE={baseline:.3f} (базовая линия по портретам; см. ограничения набора C)")
+    print(f"Справочно: шум σ=25 → дрейф {'обнаружен' if results['noise_s25']['first_alarm'] else 'не обнаружен'}")
+    print(f"\nДля сервиса (.env): BRISQUE_BASELINE={baseline:.3f} BRISQUE_INPUT_BASELINE={input_baseline:.3f} "
+          "(базовые линии по портретам; см. ограничения набора C)")
 
 
 def main() -> None:

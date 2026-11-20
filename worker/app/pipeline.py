@@ -91,6 +91,9 @@ def process(
     h, w = img.shape[:2]
     warnings: list[str] = []
 
+    # FR-012: качество входа (сжатие, шум) для обнаружения дрейфа входных данных
+    brisque_input = models.brisque.score(img)
+
     verdict = moderation.check(img)
     if not verdict.allowed:
         raise Rejected(verdict.reason or "Изображение не прошло проверку контента")
@@ -167,6 +170,7 @@ def process(
         "flag_face_zone": flag_face_zone,
         "detail_index": round(index, 4),
         "brisque": round(brisque, 3),
+        "brisque_input": round(brisque_input, 3),
         "model_seconds": round(model_seconds, 3),
         "total_seconds": round(time.perf_counter() - t_start, 3),
         "warnings": warnings,

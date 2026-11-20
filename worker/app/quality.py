@@ -53,27 +53,47 @@ class Brisque:
 
 
 class DriftMonitor:
-    """Сравнивает среднее BRISQUE за сеанс работы воркера с базовой линией набора C.
+    """Сравнивает средние BRISQUE за сеанс работы воркера с базовыми линиями набора C.
 
-    Сигнал дрейфа выдаётся не раньше, чем накопится min_jobs задач.
+    Отслеживаются два ряда: BRISQUE результата и BRISQUE входа. Модель сглаживает сжатие
+    и шум, поэтому их рост на выходе почти не виден, а во входе виден сразу (DEF-005).
+    Сигнал дрейфа выдаётся по любому из рядов, но не раньше, чем накопится min_jobs задач.
     """
 
     def __init__(self, baseline: float | None = config.BRISQUE_BASELINE,
+                 input_baseline: float | None = config.BRISQUE_INPUT_BASELINE,
                  min_jobs: int = config.BRISQUE_DRIFT_MIN_JOBS):
         self.baseline = baseline
+        self.input_baseline = input_baseline
         self.min_jobs = min_jobs
-        self.total = 0.0
-        self.count = 0
+        self.total = self.input_total = 0.0
+        self.count = self.input_count = 0
 
-    def add(self, value: float) -> dict:
+    def add(self, value: float, input_value: float | None = None) -> dict:
         self.total += value
         self.count += 1
+        if input_value is not None:
+            self.input_total += input_value
+            self.input_count += 1
         mean = self.total / self.count
         state = {"session_mean": round(mean, 3), "session_count": self.count}
+        enough = self.count >= self.min_jobs
+        sources = []
         if self.baseline:
             deviation = (mean - self.baseline) / self.baseline
             state["baseline"] = self.baseline
             state["deviation"] = round(deviation, 4)
-            state["drift"] = (self.count >= self.min_jobs
-                              and abs(deviation) > config.BRISQUE_DRIFT_THRESHOLD)
+            if enough and abs(deviation) > config.BRISQUE_DRIFT_THRESHOLD:
+                sources.append("выход")
+        if self.input_baseline and self.input_count:
+            input_mean = self.input_total / self.input_count
+            input_deviation = (input_mean - self.input_baseline) / self.input_baseline
+            state["input_mean"] = round(input_mean, 3)
+            state["input_baseline"] = self.input_baseline
+            state["input_deviation"] = round(input_deviation, 4)
+            if enough and abs(input_deviation) > config.BRISQUE_DRIFT_THRESHOLD:
+                sources.append("вход")
+        if self.baseline or self.input_baseline:
+            state["drift"] = bool(sources)
+            state["drift_source"] = sources
         return state

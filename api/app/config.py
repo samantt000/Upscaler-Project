@@ -23,6 +23,7 @@ RETENTION_SECONDS = int(os.getenv("RETENTION_SECONDS", str(24 * 3600)))
 # FR-012: базовая линия BRISQUE для страницы метрик
 BRISQUE_BASELINE = float(os.getenv("BRISQUE_BASELINE") or 0) or None
 BRISQUE_DRIFT_MIN_JOBS = int(os.getenv("BRISQUE_DRIFT_MIN_JOBS", "10"))
+BRISQUE_INPUT_BASELINE = float(os.getenv("BRISQUE_INPUT_BASELINE") or 0) or None
 
 # Режим демонстрации (CR-2026-004): доступ из интернета только по ссылке с ключом
 ACCESS_KEY = os.getenv("ACCESS_KEY", "").strip() or None

@@ -148,7 +148,7 @@ class Worker:
             journal.write("job_error", **common, error=f"{type(e).__name__}: {e}")
             return
 
-        drift = self.drift.add(res["brisque"])
+        drift = self.drift.add(res["brisque"], res.get("brisque_input"))
         self.finish(job_id, {
             "status": "done",
             "progress": 1,

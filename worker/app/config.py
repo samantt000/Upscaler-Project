@@ -33,6 +33,9 @@ FACE_ZONE_INDEX_THRESHOLD = float(os.getenv("FACE_ZONE_INDEX_THRESHOLD", "0.15")
 
 # FR-012: базовая линия BRISQUE (среднее по набору C); пусто — сравнение не выполняется
 BRISQUE_BASELINE = _float_or_none("BRISQUE_BASELINE")
+# Базовая линия BRISQUE входных изображений: модель «маскирует» сжатие и шум на выходе,
+# а во входе они видны, поэтому деградация входа ловится по нему (DEF-005)
+BRISQUE_INPUT_BASELINE = _float_or_none("BRISQUE_INPUT_BASELINE")
 BRISQUE_DRIFT_THRESHOLD = 0.15
 # Сравнение с базовой линией начинается после стольких задач: среднее по 1–2 картинкам
 # слишком шумное, и одна нетипичная картинка давала ложный сигнал дрейфа

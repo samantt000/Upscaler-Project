@@ -35,11 +35,18 @@ def summary(queue_length: int, processing: int, worker: dict | None) -> dict:
     finished = len(done) + len(errors)
     brisque = [r["brisque"] for r in done if r.get("brisque") is not None]
     brisque_mean = round(sum(brisque) / len(brisque), 3) if brisque else None
-    drift = None
-    if config.BRISQUE_BASELINE and brisque_mean is not None:
-        deviation = (brisque_mean - config.BRISQUE_BASELINE) / config.BRISQUE_BASELINE
-        drift = {"baseline": config.BRISQUE_BASELINE, "deviation": round(deviation, 4),
-                 "drift": len(brisque) >= config.BRISQUE_DRIFT_MIN_JOBS and abs(deviation) > 0.15}
+    brisque_in = [r["brisque_input"] for r in done if r.get("brisque_input") is not None]
+    brisque_in_mean = round(sum(brisque_in) / len(brisque_in), 3) if brisque_in else None
+
+    def deviation_of(mean, baseline, count):
+        if not (baseline and mean is not None):
+            return None
+        deviation = (mean - baseline) / baseline
+        return {"baseline": baseline, "deviation": round(deviation, 4),
+                "drift": count >= config.BRISQUE_DRIFT_MIN_JOBS and abs(deviation) > 0.15}
+
+    drift = deviation_of(brisque_mean, config.BRISQUE_BASELINE, len(brisque))
+    input_drift = deviation_of(brisque_in_mean, config.BRISQUE_INPUT_BASELINE, len(brisque_in))
 
     face_jobs = [r for r in done if r.get("faces")]
     reductions = [r["face_diff_reduction"] for r in face_jobs if "face_diff_reduction" in r]
@@ -71,6 +78,7 @@ def summary(queue_length: int, processing: int, worker: dict | None) -> dict:
             "flagged_zone": sum(1 for r in face_jobs if r.get("flag_face_zone")),
             "mean_diff_reduction": round(sum(reductions) / len(reductions), 4) if reductions else None,
         },
-        "quality": {"brisque_mean": brisque_mean, "brisque_count": len(brisque), "drift": drift},
+        "quality": {"brisque_mean": brisque_mean, "brisque_count": len(brisque), "drift": drift,
+                    "input_mean": brisque_in_mean, "input_drift": input_drift},
         "models": dict(Counter(r.get("model") for r in done)),
     }

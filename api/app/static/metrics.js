@@ -72,6 +72,10 @@ async function refresh() {
       ["Задач с оценкой", String(m.quality.brisque_count)],
       ["Базовая линия", drift ? fmt(drift.baseline) : "не задана"],
       ["Отклонение", drift ? pct(drift.deviation) : "нет данных", drift ? (drift.drift ? "bad" : "ok") : ""],
+      ["Среднее по входу", fmt(m.quality.input_mean)],
+      ["Базовая линия входа", m.quality.input_drift ? fmt(m.quality.input_drift.baseline) : "не задана"],
+      ["Отклонение входа", m.quality.input_drift ? pct(m.quality.input_drift.deviation) : "нет данных",
+        m.quality.input_drift ? (m.quality.input_drift.drift ? "bad" : "ok") : ""],
     ]),
     card("Детектор лиц", [
       ["Задач с лицами", String(m.faces.jobs_with_faces)],
